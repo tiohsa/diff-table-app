@@ -1,0 +1,212 @@
+﻿<Window x:Class="diff_table_app.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="clr-namespace:diff_table_app.ViewModels"
+        mc:Ignorable="d"
+        Title="DB Diff Tool" Height="800" Width="1200">
+    <Window.DataContext>
+        <vm:MainViewModel/>
+    </Window.DataContext>
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+        <Style TargetType="DataGridRow">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Status}" Value="Added">
+                    <Setter Property="Background" Value="#CCFFCC"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Status}" Value="Deleted">
+                    <Setter Property="Background" Value="#FFCCCC"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Status}" Value="Modified">
+                    <Setter Property="Background" Value="#FFFFCC"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
+    
+    <Grid Margin="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Connection Settings -->
+        <Expander Header="Connection Settings" IsExpanded="True" Grid.Row="0" Margin="0,0,0,10">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                
+                <!-- Source -->
+                <GroupBox Header="Source DB" Margin="5">
+                    <StackPanel DataContext="{Binding SourceConnection}">
+                        <ComboBox SelectedIndex="{Binding SelectedType, Mode=TwoWay}" Margin="0,5">
+                            <ComboBoxItem Content="PostgreSQL"/>
+                            <ComboBoxItem Content="Oracle"/>
+                        </ComboBox>
+
+                        <DockPanel Margin="0,2">
+                            <TextBlock Text="Host:" Width="60"/>
+                            <TextBox Text="{Binding Host}"/>
+                        </DockPanel>
+                        <DockPanel Margin="0,2">
+                            <TextBlock Text="Port:" Width="60"/>
+                            <TextBox Text="{Binding Port}"/>
+                        </DockPanel>
+                        <DockPanel Margin="0,2">
+                            <TextBlock Text="User:" Width="60"/>
+                            <TextBox Text="{Binding User}"/>
+                        </DockPanel>
+                        <DockPanel Margin="0,2">
+                            <TextBlock Text="Pass:" Width="60"/>
+                            <TextBox Text="{Binding Password}"/>
+                        </DockPanel>
+                        <DockPanel Margin="0,2">
+                            <TextBlock Text="DB/SID:" Width="60"/>
+                            <TextBox Text="{Binding Database}"/>
+                        </DockPanel>
+                        <Button Content="Test Connection" Command="{Binding TestConnectionCommand}" Margin="0,5"/>
+                    </StackPanel>
+                </GroupBox>
+
+                <!-- Target -->
+                <GroupBox Header="Target DB" Grid.Column="1" Margin="5">
+                    <StackPanel DataContext="{Binding TargetConnection}">
+                        <ComboBox SelectedIndex="{Binding SelectedType, Mode=TwoWay}" Margin="0,5">
+                            <ComboBoxItem Content="PostgreSQL"/>
+                            <ComboBoxItem Content="Oracle"/>
+                        </ComboBox>
+
+                        <DockPanel Margin="0,2">
+                            <TextBlock Text="Host:" Width="60"/>
+                            <TextBox Text="{Binding Host}"/>
+                        </DockPanel>
+                        <DockPanel Margin="0,2">
+                            <TextBlock Text="Port:" Width="60"/>
+                            <TextBox Text="{Binding Port}"/>
+                        </DockPanel>
+                        <DockPanel Margin="0,2">
+                            <TextBlock Text="User:" Width="60"/>
+                            <TextBox Text="{Binding User}"/>
+                        </DockPanel>
+                        <DockPanel Margin="0,2">
+                            <TextBlock Text="Pass:" Width="60"/>
+                            <TextBox Text="{Binding Password}"/>
+                        </DockPanel>
+                        <DockPanel Margin="0,2">
+                            <TextBlock Text="DB/SID:" Width="60"/>
+                            <TextBox Text="{Binding Database}"/>
+                        </DockPanel>
+                        <Button Content="Test Connection" Command="{Binding TestConnectionCommand}" Margin="0,5"/>
+                    </StackPanel>
+                </GroupBox>
+            </Grid>
+        </Expander>
+
+        <!-- Mode Selection -->
+        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,10">
+            <RadioButton Content="Table Compare Mode" IsChecked="{Binding IsTableMode}" Margin="10"/>
+            <RadioButton Content="SQL Compare Mode" IsChecked="{Binding IsSqlMode}" Margin="10"/>
+        </StackPanel>
+
+        <!-- Settings Area -->
+        <Border Grid.Row="2" BorderBrush="Gray" BorderThickness="1" Padding="10" Margin="0,0,0,10">
+            <Grid>
+                <!-- Table Mode UI -->
+                <Grid Visibility="{Binding IsTableMode, Converter={StaticResource BoolToVis}}">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <Button Grid.Row="0" Grid.ColumnSpan="2" Content="Load Schemas" Command="{Binding LoadSchemasCommand}" HorizontalAlignment="Left" Width="120" Margin="0,0,0,10"/>
+
+                    <StackPanel Grid.Row="1" Grid.Column="0" Margin="5">
+                        <TextBlock Text="Source Schema/Table"/>
+                        <ComboBox ItemsSource="{Binding SourceSchemas}" SelectedItem="{Binding SelectedSourceSchema}" Margin="0,2"/>
+                        <ComboBox ItemsSource="{Binding SourceTables}" SelectedItem="{Binding SelectedSourceTable}" Margin="0,2"/>
+                    </StackPanel>
+
+                    <StackPanel Grid.Row="1" Grid.Column="1" Margin="5">
+                        <TextBlock Text="Target Schema/Table"/>
+                        <ComboBox ItemsSource="{Binding TargetSchemas}" SelectedItem="{Binding SelectedTargetSchema}" Margin="0,2"/>
+                        <ComboBox ItemsSource="{Binding TargetTables}" SelectedItem="{Binding SelectedTargetTable}" Margin="0,2"/>
+                    </StackPanel>
+
+                    <StackPanel Grid.Row="2" Grid.ColumnSpan="2" Margin="5">
+                        <TextBlock Text="Keys (comma separated):"/>
+                        <TextBox Text="{Binding KeysInput}" Margin="0,2"/>
+                        <TextBlock Text="Ignore Columns (comma separated):"/>
+                        <TextBox Text="{Binding IgnoreColumnsInput}" Margin="0,2"/>
+                        <TextBlock Text="WHERE Clause (optional):"/>
+                        <TextBox Text="{Binding WhereClause}" Margin="0,2"/>
+                    </StackPanel>
+                </Grid>
+
+                <!-- SQL Mode UI -->
+                <Grid Visibility="{Binding IsSqlMode, Converter={StaticResource BoolToVis}}">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <GroupBox Header="Source SQL" Grid.Row="0" Grid.Column="0" Margin="5" Height="150">
+                        <TextBox Text="{Binding SourceSql}" AcceptsReturn="True" VerticalScrollBarVisibility="Auto"/>
+                    </GroupBox>
+                    <GroupBox Header="Target SQL" Grid.Row="0" Grid.Column="1" Margin="5" Height="150">
+                        <TextBox Text="{Binding TargetSql}" AcceptsReturn="True" VerticalScrollBarVisibility="Auto"/>
+                    </GroupBox>
+
+                    <StackPanel Grid.Row="1" Grid.ColumnSpan="2" Margin="5">
+                        <TextBlock Text="Keys (comma separated):"/>
+                        <TextBox Text="{Binding KeysInput}" Margin="0,2"/>
+                        <TextBlock Text="Target Table Name for SQL Generation:"/>
+                        <TextBox Text="{Binding TargetTableNameForSql}" Margin="0,2"/>
+                    </StackPanel>
+                </Grid>
+            </Grid>
+        </Border>
+
+        <!-- Actions & Result -->
+        <Grid Grid.Row="3">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+            
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                <Button Content="COMPARE" Command="{Binding CompareCommand}" Width="100" FontWeight="Bold" Background="LightBlue" Margin="5"/>
+                <Button Content="Generate SQL" Command="{Binding GenerateSqlCommand}" Width="100" Margin="5"/>
+                <TextBlock Text="{Binding StatusMessage}" VerticalAlignment="Center" Margin="10,0"/>
+            </StackPanel>
+
+            <DataGrid Grid.Row="1" ItemsSource="{Binding ResultView}" AutoGenerateColumns="True" IsReadOnly="True"
+                      EnableRowVirtualization="True" EnableColumnVirtualization="True">
+            </DataGrid>
+        </Grid>
+        
+        <StatusBar Grid.Row="4">
+            <StatusBarItem>
+                <TextBlock Text="{Binding StatusMessage}"/>
+            </StatusBarItem>
+            <StatusBarItem HorizontalAlignment="Right">
+                <ProgressBar IsIndeterminate="True" Width="100" Height="15" Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
+            </StatusBarItem>
+        </StatusBar>
+    </Grid>
+</Window>
