@@ -214,7 +214,7 @@ public partial class MainViewModel : ObservableObject
         {
             TargetColumns.Clear();
             ColumnMappings.Clear();
-            LoadColumnsAsync(TargetConnection, SelectedTargetSchema, value, TargetColumns).ConfigureAwait(false);
+            RefreshColumnOptionsAsync().ConfigureAwait(false);
         }
     }
 
@@ -224,8 +224,7 @@ public partial class MainViewModel : ObservableObject
         {
             SourceColumns.Clear();
             ColumnMappings.Clear();
-            LoadKeysAsync(SourceConnection, SelectedSourceSchema, value).ConfigureAwait(false);
-            LoadColumnsAsync(SourceConnection, SelectedSourceSchema, value, SourceColumns).ConfigureAwait(false);
+            RefreshColumnOptionsAsync().ConfigureAwait(false);
         }
     }
 
@@ -366,6 +365,8 @@ public partial class MainViewModel : ObservableObject
                     await LoadTablesAsync(TargetConnection, SelectedTargetSchema, _allTargetTables, TargetTables);
                     SelectedTargetTable = value.SelectedTargetTable;
                 }
+
+                await RefreshColumnOptionsAsync();
             }
         }
         finally
@@ -482,6 +483,27 @@ public partial class MainViewModel : ObservableObject
         catch (Exception ex)
         {
             _logger.LogError($"Error loading columns for {schema}.{table}.", ex);
+        }
+    }
+
+    private async Task RefreshColumnOptionsAsync()
+    {
+        var tasks = new List<Task>();
+
+        if (!string.IsNullOrEmpty(SelectedSourceSchema) && !string.IsNullOrEmpty(SelectedSourceTable))
+        {
+            tasks.Add(LoadKeysAsync(SourceConnection, SelectedSourceSchema, SelectedSourceTable));
+            tasks.Add(LoadColumnsAsync(SourceConnection, SelectedSourceSchema, SelectedSourceTable, SourceColumns));
+        }
+
+        if (!string.IsNullOrEmpty(SelectedTargetSchema) && !string.IsNullOrEmpty(SelectedTargetTable))
+        {
+            tasks.Add(LoadColumnsAsync(TargetConnection, SelectedTargetSchema, SelectedTargetTable, TargetColumns));
+        }
+
+        if (tasks.Count > 0)
+        {
+            await Task.WhenAll(tasks);
         }
     }
 
