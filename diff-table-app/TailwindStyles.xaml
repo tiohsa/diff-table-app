@@ -22,20 +22,27 @@
     <!-- Green (Emerald) -->
     <SolidColorBrush x:Key="Emerald500" Color="#10B981"/>
     <SolidColorBrush x:Key="Emerald100" Color="#D1FAE5"/>
+    <SolidColorBrush x:Key="Emerald50" Color="#ECFDF3"/>
 
     <!-- Red -->
     <SolidColorBrush x:Key="Red500" Color="#EF4444"/>
     <SolidColorBrush x:Key="Red100" Color="#FEE2E2"/>
+    <SolidColorBrush x:Key="Rose50" Color="#FFF1F2"/>
 
     <!-- Amber -->
     <SolidColorBrush x:Key="Amber100" Color="#FEF3C7"/>
+    <SolidColorBrush x:Key="Amber50" Color="#FFFBEB"/>
+
+    <!-- Diff Value Accents -->
+    <SolidColorBrush x:Key="DiffOldBrush" Color="#B91C1C"/>
+    <SolidColorBrush x:Key="DiffNewBrush" Color="#047857"/>
 
     <!-- Converters -->
     <BooleanToVisibilityConverter x:Key="BoolToVis"/>
 
     <!-- Base Styles -->
     <Style TargetType="TextBlock">
-        <Setter Property="Foreground" Value="{StaticResource Slate800}"/>
+        <Setter Property="Foreground" Value="{StaticResource Slate900}"/>
         <Setter Property="FontSize" Value="14"/>
         <Setter Property="VerticalAlignment" Value="Center"/>
     </Style>

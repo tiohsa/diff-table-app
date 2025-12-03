@@ -129,21 +129,17 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
-    partial void OnShowDiffOnlyChanged(bool value)
+    private void ApplyResultFilter(DataView? view = null)
     {
-        // Re-apply filter on ResultView
-        if (ResultView != null)
-        {
-            if (value)
-            {
-                ResultView.RowFilter = "Status <> 'Unchanged'";
-            }
-            else
-            {
-                ResultView.RowFilter = "";
-            }
-        }
+        var targetView = view ?? ResultView;
+        if (targetView == null) return;
+
+        targetView.RowFilter = ShowDiffOnly
+            ? "IsChanged = true OR Status <> 'Unchanged'"
+            : string.Empty;
     }
+
+    partial void OnShowDiffOnlyChanged(bool value) => ApplyResultFilter();
 
     partial void OnColumnMappingInputChanged(string value)
     {
@@ -161,36 +157,48 @@ public partial class MainViewModel : ObservableObject
 
         var dt = new DataTable();
         dt.Columns.Add("Status", typeof(string));
-        
-        foreach (var col in value.Columns)
-        {
-            dt.Columns.Add(col, typeof(object));
-        }
+        dt.Columns.Add("KeySummary", typeof(string));
+        dt.Columns.Add("Column", typeof(string));
+        dt.Columns.Add("SourceValue", typeof(object));
+        dt.Columns.Add("TargetValue", typeof(object));
+        dt.Columns.Add("IsChanged", typeof(bool));
 
         foreach (var row in value.Rows)
         {
-            var dr = dt.NewRow();
-            dr["Status"] = row.Status.ToString();
-            foreach (var col in value.Columns)
+            var keySummary = row.KeyValues.Count == 0
+                ? string.Empty
+                : string.Join(", ", row.KeyValues.Select(kv => $"{kv.Key}={FormatValue(kv.Value)}"));
+
+            foreach (var columnName in value.Columns)
             {
-                if (row.ColumnDiffs.TryGetValue(col, out var cellDiff))
+                if (!row.ColumnDiffs.TryGetValue(columnName, out var cellDiff))
                 {
-                    if (row.Status == RowStatus.Deleted)
-                        dr[col] = cellDiff.OldValue;
-                    else
-                        dr[col] = cellDiff.NewValue;
+                    continue;
                 }
+
+                var dr = dt.NewRow();
+                dr["Status"] = row.Status.ToString();
+                dr["KeySummary"] = keySummary;
+                dr["Column"] = columnName;
+                dr["SourceValue"] = row.Status == RowStatus.Added ? null : cellDiff.OldValue;
+                dr["TargetValue"] = row.Status == RowStatus.Deleted ? null : cellDiff.NewValue;
+                dr["IsChanged"] = row.Status != RowStatus.Unchanged || cellDiff.IsChanged;
+                dt.Rows.Add(dr);
             }
-            dt.Rows.Add(dr);
         }
 
         var view = dt.DefaultView;
-        if (ShowDiffOnly)
-        {
-            view.RowFilter = "Status <> 'Unchanged'";
-        }
+        ApplyResultFilter(view);
         ResultView = view;
     }
+
+    private static string FormatValue(object? value) => value switch
+    {
+        null => "NULL",
+        DBNull => "NULL",
+        DateTime dt => dt.ToString("s"),
+        _ => value?.ToString() ?? string.Empty
+    };
 
     partial void OnSelectedSourceSchemaChanged(string? value)
     {
