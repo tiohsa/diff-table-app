@@ -5,6 +5,7 @@ using diff_table_app.Services;
 using diff_table_app.Services.Interfaces;
 using System.Collections.ObjectModel;
 using System.Data;
+using System.Linq;
 using System.IO;
 using System.Windows;
 
@@ -14,6 +15,9 @@ public partial class MainViewModel : ObservableObject
 {
     private readonly DiffService _diffService = new();
     private readonly SqlGeneratorService _sqlGeneratorService = new();
+    private readonly ILoggerService _logger;
+    private readonly PresetService _presetService;
+    private bool _isPresetLoading = false;
 
     public ConnectionViewModel SourceConnection { get; } = new();
     public ConnectionViewModel TargetConnection { get; } = new();
@@ -21,7 +25,17 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty] private bool _isTableMode = true;
     [ObservableProperty] private bool _isSqlMode = false;
 
+    // Presets
+    [ObservableProperty] private ObservableCollection<Preset> _presets = new();
+    [ObservableProperty] private Preset? _selectedPreset;
+    [ObservableProperty] private string _newPresetName = "";
+
     // Table Mode
+    private ObservableCollection<string> _allSourceSchemas = new();
+    private ObservableCollection<string> _allSourceTables = new();
+    private ObservableCollection<string> _allTargetSchemas = new();
+    private ObservableCollection<string> _allTargetTables = new();
+
     [ObservableProperty] private ObservableCollection<string> _sourceSchemas = new();
     [ObservableProperty] private ObservableCollection<string> _sourceTables = new();
     [ObservableProperty] private string? _selectedSourceSchema;
@@ -32,9 +46,18 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty] private string? _selectedTargetSchema;
     [ObservableProperty] private string? _selectedTargetTable;
 
+    // Filters
+    [ObservableProperty] private string _sourceSchemaFilter = "";
+    [ObservableProperty] private string _sourceTableFilter = "";
+    [ObservableProperty] private string _targetSchemaFilter = "";
+    [ObservableProperty] private string _targetTableFilter = "";
+
     [ObservableProperty] private string _keysInput = ""; // Comma separated
     [ObservableProperty] private string _ignoreColumnsInput = ""; // Comma separated
+    [ObservableProperty] private string _columnMappingInput = ""; // Comma separated, Source=Target
     [ObservableProperty] private string _whereClause = "";
+
+    [ObservableProperty] private bool _showDiffOnly = false;
 
     // SQL Mode
     [ObservableProperty] private string _sourceSql = "SELECT * FROM ...";
@@ -47,8 +70,62 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty] private bool _isBusy;
     [ObservableProperty] private string _statusMessage = "Ready";
 
+    // Constructor injection for tests
+    public MainViewModel(ILoggerService logger, PresetService presetService)
+    {
+        _logger = logger;
+        _presetService = presetService;
+        _logger.LogInformation("Application started.");
+        LoadPresetsCommand.Execute(null);
+    }
+
+    // Default constructor for XAML
+    public MainViewModel() : this(new FileLoggerService(), new PresetService())
+    {
+    }
+
     partial void OnIsTableModeChanged(bool value) => IsSqlMode = !value;
     partial void OnIsSqlModeChanged(bool value) => IsTableMode = !value;
+
+    partial void OnSourceSchemaFilterChanged(string value) => FilterCollection(_allSourceSchemas, SourceSchemas, value);
+    partial void OnSourceTableFilterChanged(string value) => FilterCollection(_allSourceTables, SourceTables, value);
+    partial void OnTargetSchemaFilterChanged(string value) => FilterCollection(_allTargetSchemas, TargetSchemas, value);
+    partial void OnTargetTableFilterChanged(string value) => FilterCollection(_allTargetTables, TargetTables, value);
+
+    private void FilterCollection(ObservableCollection<string> allItems, ObservableCollection<string> filteredItems, string filter)
+    {
+        // Preserve selection if possible (though binding might clear it when collection changes)
+        // We re-populate.
+        filteredItems.Clear();
+        if (string.IsNullOrWhiteSpace(filter))
+        {
+            foreach (var item in allItems) filteredItems.Add(item);
+        }
+        else
+        {
+            var lowerFilter = filter.ToLowerInvariant();
+            foreach (var item in allItems.Where(i => i.ToLowerInvariant().Contains(lowerFilter)))
+            {
+                filteredItems.Add(item);
+            }
+        }
+    }
+
+    partial void OnShowDiffOnlyChanged(bool value)
+    {
+        // Re-apply filter on ResultView
+        if (ResultView != null)
+        {
+            if (value)
+            {
+                ResultView.RowFilter = "Status <> 'Unchanged'";
+            }
+            else
+            {
+                ResultView.RowFilter = "";
+            }
+        }
+    }
 
     partial void OnDiffResultChanged(DiffResult? value)
     {
@@ -82,25 +159,180 @@ public partial class MainViewModel : ObservableObject
             }
             dt.Rows.Add(dr);
         }
-        ResultView = dt.DefaultView;
+
+        var view = dt.DefaultView;
+        if (ShowDiffOnly)
+        {
+            view.RowFilter = "Status <> 'Unchanged'";
+        }
+        ResultView = view;
     }
 
     partial void OnSelectedSourceSchemaChanged(string? value)
     {
-        if (value != null) LoadTablesAsync(SourceConnection, value, SourceTables).ConfigureAwait(false);
+        if (_isPresetLoading) return;
+        if (value != null) LoadTablesAsync(SourceConnection, value, _allSourceTables, SourceTables).ConfigureAwait(false);
     }
 
     partial void OnSelectedTargetSchemaChanged(string? value)
     {
-        if (value != null) LoadTablesAsync(TargetConnection, value, TargetTables).ConfigureAwait(false);
+        if (_isPresetLoading) return;
+        if (value != null) LoadTablesAsync(TargetConnection, value, _allTargetTables, TargetTables).ConfigureAwait(false);
     }
     
     partial void OnSelectedSourceTableChanged(string? value)
     {
+        if (_isPresetLoading) return;
         if (value != null && !string.IsNullOrEmpty(SelectedSourceSchema))
         {
              LoadKeysAsync(SourceConnection, SelectedSourceSchema, value).ConfigureAwait(false);
         }
+    }
+
+    // Preset Commands
+    [RelayCommand]
+    private async Task LoadPresetsAsync()
+    {
+        var loaded = await _presetService.LoadPresetsAsync();
+        Presets.Clear();
+        foreach (var p in loaded) Presets.Add(p);
+    }
+
+    [RelayCommand]
+    private async Task SavePresetAsync()
+    {
+        if (string.IsNullOrWhiteSpace(NewPresetName))
+        {
+            MessageBox.Show("Please enter a preset name.");
+            return;
+        }
+
+        var preset = new Preset
+        {
+            Name = NewPresetName,
+            SourceConnection = new ConnectionInfo
+            {
+                SelectedType = SourceConnection.SelectedType,
+                Host = SourceConnection.Host,
+                Port = SourceConnection.Port,
+                User = SourceConnection.User,
+                Password = SourceConnection.Password,
+                Database = SourceConnection.Database
+            },
+            TargetConnection = new ConnectionInfo
+            {
+                SelectedType = TargetConnection.SelectedType,
+                Host = TargetConnection.Host,
+                Port = TargetConnection.Port,
+                User = TargetConnection.User,
+                Password = TargetConnection.Password,
+                Database = TargetConnection.Database
+            },
+            IsTableMode = IsTableMode,
+            SelectedSourceSchema = SelectedSourceSchema,
+            SelectedSourceTable = SelectedSourceTable,
+            SelectedTargetSchema = SelectedTargetSchema,
+            SelectedTargetTable = SelectedTargetTable,
+            KeysInput = KeysInput,
+            IgnoreColumnsInput = IgnoreColumnsInput,
+            ColumnMappingInput = ColumnMappingInput,
+            WhereClause = WhereClause,
+            SourceSql = SourceSql,
+            TargetSql = TargetSql,
+            TargetTableNameForSql = TargetTableNameForSql,
+            ShowDiffOnly = ShowDiffOnly
+        };
+
+        var existing = Presets.FirstOrDefault(p => p.Name == NewPresetName);
+        if (existing != null)
+        {
+            Presets.Remove(existing);
+        }
+        Presets.Add(preset);
+        await _presetService.SavePresetsAsync(Presets.ToList());
+        MessageBox.Show("Preset saved.");
+    }
+
+    [RelayCommand]
+    private async Task DeletePresetAsync()
+    {
+        if (SelectedPreset == null) return;
+        Presets.Remove(SelectedPreset);
+        await _presetService.SavePresetsAsync(Presets.ToList());
+    }
+
+    [RelayCommand]
+    private async Task ApplyPresetAsync()
+    {
+        if (SelectedPreset == null) return;
+        var value = SelectedPreset;
+
+        IsBusy = true;
+        StatusMessage = "Applying Preset...";
+        _isPresetLoading = true;
+        try
+        {
+            SourceConnection.SelectedType = value.SourceConnection.SelectedType;
+            SourceConnection.Host = value.SourceConnection.Host;
+            SourceConnection.Port = value.SourceConnection.Port;
+            SourceConnection.User = value.SourceConnection.User;
+            SourceConnection.Password = value.SourceConnection.Password;
+            SourceConnection.Database = value.SourceConnection.Database;
+
+            TargetConnection.SelectedType = value.TargetConnection.SelectedType;
+            TargetConnection.Host = value.TargetConnection.Host;
+            TargetConnection.Port = value.TargetConnection.Port;
+            TargetConnection.User = value.TargetConnection.User;
+            TargetConnection.Password = value.TargetConnection.Password;
+            TargetConnection.Database = value.TargetConnection.Database;
+
+            IsTableMode = value.IsTableMode;
+            NewPresetName = value.Name;
+
+            // Set Inputs
+            KeysInput = value.KeysInput;
+            IgnoreColumnsInput = value.IgnoreColumnsInput;
+            ColumnMappingInput = value.ColumnMappingInput;
+            WhereClause = value.WhereClause;
+            SourceSql = value.SourceSql;
+            TargetSql = value.TargetSql;
+            TargetTableNameForSql = value.TargetTableNameForSql;
+            ShowDiffOnly = value.ShowDiffOnly;
+
+            if (IsTableMode)
+            {
+                // Load Schemas
+                await LoadSchemaListAsync(SourceConnection, _allSourceSchemas, SourceSchemas);
+                await LoadSchemaListAsync(TargetConnection, _allTargetSchemas, TargetSchemas);
+
+                SelectedSourceSchema = value.SelectedSourceSchema;
+                SelectedTargetSchema = value.SelectedTargetSchema;
+
+                // Load Tables
+                if (!string.IsNullOrEmpty(SelectedSourceSchema))
+                {
+                    await LoadTablesAsync(SourceConnection, SelectedSourceSchema, _allSourceTables, SourceTables);
+                    SelectedSourceTable = value.SelectedSourceTable;
+                }
+
+                if (!string.IsNullOrEmpty(SelectedTargetSchema))
+                {
+                    await LoadTablesAsync(TargetConnection, SelectedTargetSchema, _allTargetTables, TargetTables);
+                    SelectedTargetTable = value.SelectedTargetTable;
+                }
+            }
+        }
+        finally
+        {
+            _isPresetLoading = false;
+            IsBusy = false;
+            StatusMessage = "Preset Applied";
+        }
+    }
+
+    partial void OnSelectedPresetChanged(Preset? value)
+    {
+         if (value != null) NewPresetName = value.Name;
     }
 
     [RelayCommand]
@@ -108,13 +340,16 @@ public partial class MainViewModel : ObservableObject
     {
         IsBusy = true;
         StatusMessage = "Loading Schemas...";
+        _logger.LogInformation("Loading schemas initiated.");
         try
         {
-            await LoadSchemaListAsync(SourceConnection, SourceSchemas);
-            await LoadSchemaListAsync(TargetConnection, TargetSchemas);
+            await LoadSchemaListAsync(SourceConnection, _allSourceSchemas, SourceSchemas);
+            await LoadSchemaListAsync(TargetConnection, _allTargetSchemas, TargetSchemas);
+            _logger.LogInformation("Schemas loaded successfully.");
         }
         catch (Exception ex)
         {
+            _logger.LogError("Error loading schemas.", ex);
             MessageBox.Show(ex.Message);
         }
         finally
@@ -124,19 +359,24 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
-    private async Task LoadSchemaListAsync(ConnectionViewModel connVm, ObservableCollection<string> collection)
+    private async Task LoadSchemaListAsync(ConnectionViewModel connVm, ObservableCollection<string> allCollection, ObservableCollection<string> filteredCollection)
     {
         using var client = connVm.CreateClient();
         await client.ConnectAsync(connVm.GetConnectionString());
         var schemas = await client.GetSchemasAsync();
         Application.Current.Dispatcher.Invoke(() =>
         {
-            collection.Clear();
-            foreach (var s in schemas) collection.Add(s);
+            allCollection.Clear();
+            filteredCollection.Clear();
+            foreach (var s in schemas)
+            {
+                allCollection.Add(s);
+                filteredCollection.Add(s);
+            }
         });
     }
 
-    private async Task LoadTablesAsync(ConnectionViewModel connVm, string schema, ObservableCollection<string> collection)
+    private async Task LoadTablesAsync(ConnectionViewModel connVm, string schema, ObservableCollection<string> allCollection, ObservableCollection<string> filteredCollection)
     {
         try
         {
@@ -145,13 +385,18 @@ public partial class MainViewModel : ObservableObject
             var tables = await client.GetTablesAsync(schema);
             Application.Current.Dispatcher.Invoke(() =>
             {
-                collection.Clear();
-                foreach (var t in tables) collection.Add(t);
+                allCollection.Clear();
+                filteredCollection.Clear();
+                foreach (var t in tables)
+                {
+                    allCollection.Add(t);
+                    filteredCollection.Add(t);
+                }
             });
         }
         catch (Exception ex)
         {
-            // Log or show error
+            _logger.LogError($"Error loading tables for schema {schema}.", ex);
         }
     }
     
@@ -167,9 +412,9 @@ public partial class MainViewModel : ObservableObject
                 KeysInput = string.Join(",", keys);
             });
         }
-        catch
+        catch (Exception ex)
         {
-            // ignore
+            _logger.LogError($"Error loading keys for table {table}.", ex);
         }
     }
 
@@ -178,11 +423,26 @@ public partial class MainViewModel : ObservableObject
     {
         IsBusy = true;
         StatusMessage = "Comparing...";
+        _logger.LogInformation("Comparison started.");
         try
         {
             DataTable dtSource, dtTarget;
             List<string> keys;
             List<string> ignoreCols = IgnoreColumnsInput.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()).ToList();
+            Dictionary<string, string> colMapping = new Dictionary<string, string>();
+
+            if (!string.IsNullOrWhiteSpace(ColumnMappingInput))
+            {
+                var pairs = ColumnMappingInput.Split(',', StringSplitOptions.RemoveEmptyEntries);
+                foreach (var pair in pairs)
+                {
+                    var parts = pair.Split('=');
+                    if (parts.Length == 2)
+                    {
+                        colMapping[parts[0].Trim()] = parts[1].Trim();
+                    }
+                }
+            }
 
             if (IsTableMode)
             {
@@ -190,6 +450,7 @@ public partial class MainViewModel : ObservableObject
                     string.IsNullOrEmpty(SelectedTargetSchema) || string.IsNullOrEmpty(SelectedTargetTable))
                 {
                     MessageBox.Show("Please select schemas and tables.");
+                    _logger.LogWarning("Comparison aborted: Schemas/Tables not selected.");
                     return;
                 }
 
@@ -197,6 +458,7 @@ public partial class MainViewModel : ObservableObject
                 if (keys.Count == 0)
                 {
                     MessageBox.Show("Please define keys.");
+                    _logger.LogWarning("Comparison aborted: Keys not defined.");
                     return;
                 }
 
@@ -204,11 +466,15 @@ public partial class MainViewModel : ObservableObject
                 await sClient.ConnectAsync(SourceConnection.GetConnectionString());
                 // 簡易的に SELECT * で取得。本来はカラム指定すべき。
                 var where = string.IsNullOrWhiteSpace(WhereClause) ? "" : $"WHERE {WhereClause}";
-                dtSource = await sClient.ExecuteQueryAsync($"SELECT * FROM {sClient.QuoteIdentifier(SelectedSourceSchema)}.{sClient.QuoteIdentifier(SelectedSourceTable)} {where}");
+                var srcSql = $"SELECT * FROM {sClient.QuoteIdentifier(SelectedSourceSchema)}.{sClient.QuoteIdentifier(SelectedSourceTable)} {where}";
+                _logger.LogInformation($"Executing Source Query: {srcSql}");
+                dtSource = await sClient.ExecuteQueryAsync(srcSql);
 
                 using var tClient = TargetConnection.CreateClient();
                 await tClient.ConnectAsync(TargetConnection.GetConnectionString());
-                dtTarget = await tClient.ExecuteQueryAsync($"SELECT * FROM {tClient.QuoteIdentifier(SelectedTargetSchema)}.{tClient.QuoteIdentifier(SelectedTargetTable)} {where}");
+                var tgtSql = $"SELECT * FROM {tClient.QuoteIdentifier(SelectedTargetSchema)}.{tClient.QuoteIdentifier(SelectedTargetTable)} {where}";
+                _logger.LogInformation($"Executing Target Query: {tgtSql}");
+                dtTarget = await tClient.ExecuteQueryAsync(tgtSql);
             }
             else
             {
@@ -216,20 +482,25 @@ public partial class MainViewModel : ObservableObject
                 
                 using var sClient = SourceConnection.CreateClient();
                 await sClient.ConnectAsync(SourceConnection.GetConnectionString());
+                _logger.LogInformation("Executing Source SQL in SQL Mode.");
                 dtSource = await sClient.ExecuteQueryAsync(SourceSql);
 
                 using var tClient = TargetConnection.CreateClient();
                 await tClient.ConnectAsync(TargetConnection.GetConnectionString());
+                _logger.LogInformation("Executing Target SQL in SQL Mode.");
                 dtTarget = await tClient.ExecuteQueryAsync(TargetSql);
             }
 
-            DiffResult = await Task.Run(() => _diffService.Compare(dtSource, dtTarget, keys, ignoreCols));
-            StatusMessage = $"Diff Complete. Added: {DiffResult.AddedCount}, Deleted: {DiffResult.DeletedCount}, Modified: {DiffResult.ModifiedCount}";
+            DiffResult = await Task.Run(() => _diffService.Compare(dtSource, dtTarget, keys, ignoreCols, colMapping));
+            var msg = $"Diff Complete. Added: {DiffResult.AddedCount}, Deleted: {DiffResult.DeletedCount}, Modified: {DiffResult.ModifiedCount}";
+            StatusMessage = msg;
+            _logger.LogInformation(msg);
         }
         catch (Exception ex)
         {
             MessageBox.Show($"Error: {ex.Message}");
             StatusMessage = "Error";
+            _logger.LogError("Error during comparison.", ex);
         }
         finally
         {
@@ -251,6 +522,7 @@ public partial class MainViewModel : ObservableObject
                 return;
             }
 
+            _logger.LogInformation($"Generating SQL for target table: {targetTable}");
             var keys = KeysInput.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()).ToList();
             
             // Target Clientを使ってクォート処理などを行う
@@ -263,11 +535,13 @@ public partial class MainViewModel : ObservableObject
             {
                 await File.WriteAllTextAsync(saveDlg.FileName, sql);
                 MessageBox.Show("Saved.");
+                _logger.LogInformation($"SQL saved to {saveDlg.FileName}");
             }
         }
         catch (Exception ex)
         {
             MessageBox.Show($"Error: {ex.Message}");
+            _logger.LogError("Error generating SQL.", ex);
         }
     }
 }
