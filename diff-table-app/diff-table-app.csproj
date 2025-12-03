@@ -2,11 +2,13 @@
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
+    <AssemblyName>diff_table_app</AssemblyName>
     <TargetFramework>net10.0-windows</TargetFramework>
     <RootNamespace>diff_table_app</RootNamespace>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+    <StartupObject>diff_table_app.App</StartupObject>
   </PropertyGroup>
 
   <ItemGroup>

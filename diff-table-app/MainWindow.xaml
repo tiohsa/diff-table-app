@@ -4,6 +4,8 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:vm="clr-namespace:diff_table_app.ViewModels"
+        xmlns:models="clr-namespace:diff_table_app.Models"
+        xmlns:sys="clr-namespace:System;assembly=System.Runtime"
         mc:Ignorable="d"
         Title="DB Diff Tool" Height="800" Width="1200"
         Background="{StaticResource Slate50}">
@@ -12,6 +14,11 @@
     </Window.DataContext>
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+        <ObjectDataProvider x:Key="DatabaseTypes" MethodName="GetValues" ObjectType="{x:Type sys:Enum}">
+            <ObjectDataProvider.MethodParameters>
+                <x:Type TypeName="models:DatabaseType"/>
+            </ObjectDataProvider.MethodParameters>
+        </ObjectDataProvider>
         <Style TargetType="DataGridRow">
             <Style.Triggers>
                 <DataTrigger Binding="{Binding Status}" Value="Added">
@@ -26,7 +33,7 @@
             </Style.Triggers>
         </Style>
     </Window.Resources>
-    
+
     <Grid>
         <Grid Margin="10">
             <Grid.RowDefinitions>
@@ -82,7 +89,9 @@
                                 <!-- Source -->
                                 <GroupBox Header="Source DB" Margin="0,0,5,0">
                                     <StackPanel DataContext="{Binding SourceConnection}">
-                                        <ComboBox SelectedIndex="{Binding SelectedType, Mode=TwoWay}" Margin="0,5"/>
+                                        <ComboBox ItemsSource="{Binding Source={StaticResource DatabaseTypes}}"
+                                                  SelectedItem="{Binding SelectedType, Mode=TwoWay}"
+                                                  Margin="0,5"/>
 
                                         <DockPanel Margin="0,2">
                                             <TextBlock Text="Host:" Width="50" Foreground="{StaticResource Slate600}"/>
@@ -111,7 +120,9 @@
                                 <!-- Target -->
                                 <GroupBox Header="Target DB" Grid.Column="1" Margin="5,0,0,0">
                                     <StackPanel DataContext="{Binding TargetConnection}">
-                                        <ComboBox SelectedIndex="{Binding SelectedType, Mode=TwoWay}" Margin="0,5"/>
+                                        <ComboBox ItemsSource="{Binding Source={StaticResource DatabaseTypes}}"
+                                                  SelectedItem="{Binding SelectedType, Mode=TwoWay}"
+                                                  Margin="0,5"/>
 
                                         <DockPanel Margin="0,2">
                                             <TextBlock Text="Host:" Width="50" Foreground="{StaticResource Slate600}"/>
@@ -238,7 +249,7 @@
                     </DataGrid>
                 </Grid>
             </Grid>
-            
+
             <!-- StatusBar -->
             <StatusBar Grid.Row="1" Background="{StaticResource Slate100}" BorderBrush="{StaticResource Slate200}" BorderThickness="0,1,0,0" Padding="5,0">
                 <StatusBarItem>
