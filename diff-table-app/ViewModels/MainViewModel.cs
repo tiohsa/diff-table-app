@@ -195,29 +195,37 @@ public partial class MainViewModel : ObservableObject
     partial void OnSelectedSourceSchemaChanged(string? value)
     {
         if (_isPresetLoading) return;
+        SourceColumns.Clear();
+        ColumnMappings.Clear();
         if (value != null) LoadTablesAsync(SourceConnection, value, _allSourceTables, SourceTables).ConfigureAwait(false);
     }
 
     partial void OnSelectedTargetSchemaChanged(string? value)
     {
         if (_isPresetLoading) return;
+        TargetColumns.Clear();
+        ColumnMappings.Clear();
         if (value != null) LoadTablesAsync(TargetConnection, value, _allTargetTables, TargetTables).ConfigureAwait(false);
     }
-    
+
     partial void OnSelectedTargetTableChanged(string? value)
     {
         if (!string.IsNullOrEmpty(value) && !string.IsNullOrEmpty(SelectedTargetSchema))
         {
+            TargetColumns.Clear();
+            ColumnMappings.Clear();
             LoadColumnsAsync(TargetConnection, SelectedTargetSchema, value, TargetColumns).ConfigureAwait(false);
         }
     }
-    
+
     partial void OnSelectedSourceTableChanged(string? value)
     {
         if (!string.IsNullOrEmpty(value) && !string.IsNullOrEmpty(SelectedSourceSchema))
         {
-             LoadKeysAsync(SourceConnection, SelectedSourceSchema, value).ConfigureAwait(false);
-             LoadColumnsAsync(SourceConnection, SelectedSourceSchema, value, SourceColumns).ConfigureAwait(false);
+            SourceColumns.Clear();
+            ColumnMappings.Clear();
+            LoadKeysAsync(SourceConnection, SelectedSourceSchema, value).ConfigureAwait(false);
+            LoadColumnsAsync(SourceConnection, SelectedSourceSchema, value, SourceColumns).ConfigureAwait(false);
         }
     }
 
