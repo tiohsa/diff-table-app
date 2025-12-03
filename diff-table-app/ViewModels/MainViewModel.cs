@@ -4,10 +4,12 @@ using diff_table_app.Models;
 using diff_table_app.Services;
 using diff_table_app.Services.Interfaces;
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using System.Data;
 using System.Linq;
 using System.IO;
 using System.Windows;
+using System.ComponentModel;
 
 namespace diff_table_app.ViewModels;
 
@@ -18,6 +20,7 @@ public partial class MainViewModel : ObservableObject
     private readonly ILoggerService _logger;
     private readonly PresetService _presetService;
     private bool _isPresetLoading = false;
+    private bool _suppressMappingSync = false;
 
     public ConnectionViewModel SourceConnection { get; } = new();
     public ConnectionViewModel TargetConnection { get; } = new();
@@ -38,11 +41,13 @@ public partial class MainViewModel : ObservableObject
 
     [ObservableProperty] private ObservableCollection<string> _sourceSchemas = new();
     [ObservableProperty] private ObservableCollection<string> _sourceTables = new();
+    [ObservableProperty] private ObservableCollection<string> _sourceColumns = new();
     [ObservableProperty] private string? _selectedSourceSchema;
     [ObservableProperty] private string? _selectedSourceTable;
     
     [ObservableProperty] private ObservableCollection<string> _targetSchemas = new();
     [ObservableProperty] private ObservableCollection<string> _targetTables = new();
+    [ObservableProperty] private ObservableCollection<string> _targetColumns = new();
     [ObservableProperty] private string? _selectedTargetSchema;
     [ObservableProperty] private string? _selectedTargetTable;
 
@@ -56,6 +61,7 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty] private string _ignoreColumnsInput = ""; // Comma separated
     [ObservableProperty] private string _columnMappingInput = ""; // Comma separated, Source=Target
     [ObservableProperty] private string _whereClause = "";
+    [ObservableProperty] private ObservableCollection<ColumnMappingEntry> _columnMappings = new();
 
     [ObservableProperty] private bool _showDiffOnly = false;
 
@@ -76,6 +82,7 @@ public partial class MainViewModel : ObservableObject
         _logger = logger;
         _presetService = presetService;
         _logger.LogInformation("Application started.");
+        HookColumnMappingEvents();
         LoadPresetsCommand.Execute(null);
     }
 
@@ -125,6 +132,12 @@ public partial class MainViewModel : ObservableObject
                 ResultView.RowFilter = "";
             }
         }
+    }
+
+    partial void OnColumnMappingInputChanged(string value)
+    {
+        if (_suppressMappingSync) return;
+        ApplyMappingString(value);
     }
 
     partial void OnDiffResultChanged(DiffResult? value)
@@ -180,12 +193,20 @@ public partial class MainViewModel : ObservableObject
         if (value != null) LoadTablesAsync(TargetConnection, value, _allTargetTables, TargetTables).ConfigureAwait(false);
     }
     
+    partial void OnSelectedTargetTableChanged(string? value)
+    {
+        if (!string.IsNullOrEmpty(value) && !string.IsNullOrEmpty(SelectedTargetSchema))
+        {
+            LoadColumnsAsync(TargetConnection, SelectedTargetSchema, value, TargetColumns).ConfigureAwait(false);
+        }
+    }
+    
     partial void OnSelectedSourceTableChanged(string? value)
     {
-        if (_isPresetLoading) return;
-        if (value != null && !string.IsNullOrEmpty(SelectedSourceSchema))
+        if (!string.IsNullOrEmpty(value) && !string.IsNullOrEmpty(SelectedSourceSchema))
         {
              LoadKeysAsync(SourceConnection, SelectedSourceSchema, value).ConfigureAwait(false);
+             LoadColumnsAsync(SourceConnection, SelectedSourceSchema, value, SourceColumns).ConfigureAwait(false);
         }
     }
 
@@ -201,6 +222,7 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     private async Task SavePresetAsync()
     {
+        SyncColumnMappingString();
         if (string.IsNullOrWhiteSpace(NewPresetName))
         {
             MessageBox.Show("Please enter a preset name.");
@@ -418,6 +440,154 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
+    private async Task LoadColumnsAsync(ConnectionViewModel connVm, string schema, string table, ObservableCollection<string> targetCollection)
+    {
+        try
+        {
+            using var client = connVm.CreateClient();
+            await client.ConnectAsync(connVm.GetConnectionString());
+            var cols = await client.GetColumnsAsync(schema, table);
+            Application.Current.Dispatcher.Invoke(() =>
+            {
+                targetCollection.Clear();
+                foreach (var col in cols) targetCollection.Add(col.Name);
+            });
+            SyncMappingsToAvailableColumns();
+            EnsureDefaultMappings();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError($"Error loading columns for {schema}.{table}.", ex);
+        }
+    }
+
+    private void HookColumnMappingEvents()
+    {
+        ColumnMappings.CollectionChanged += ColumnMappings_CollectionChanged;
+        foreach (var entry in ColumnMappings)
+        {
+            entry.PropertyChanged += MappingEntry_PropertyChanged;
+        }
+    }
+
+    private void ColumnMappings_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (e.NewItems != null)
+        {
+            foreach (ColumnMappingEntry entry in e.NewItems)
+            {
+                entry.PropertyChanged += MappingEntry_PropertyChanged;
+            }
+        }
+        if (e.OldItems != null)
+        {
+            foreach (ColumnMappingEntry entry in e.OldItems)
+            {
+                entry.PropertyChanged -= MappingEntry_PropertyChanged;
+            }
+        }
+        SyncColumnMappingString();
+    }
+
+    private void MappingEntry_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        SyncColumnMappingString();
+    }
+
+    private void SyncColumnMappingString()
+    {
+        if (_suppressMappingSync) return;
+        _suppressMappingSync = true;
+        ColumnMappingInput = BuildMappingString(ColumnMappings);
+        _suppressMappingSync = false;
+    }
+
+    private string BuildMappingString(IEnumerable<ColumnMappingEntry> entries)
+    {
+        return string.Join(",", entries
+            .Where(m => !string.IsNullOrWhiteSpace(m.SourceColumn) && !string.IsNullOrWhiteSpace(m.TargetColumn))
+            .Select(m => $"{m.SourceColumn}={m.TargetColumn}"));
+    }
+
+    private void ApplyMappingString(string value)
+    {
+        _suppressMappingSync = true;
+        ColumnMappings.Clear();
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            var pairs = value.Split(',', StringSplitOptions.RemoveEmptyEntries);
+            foreach (var pair in pairs)
+            {
+                var parts = pair.Split('=');
+                if (parts.Length == 2)
+                {
+                    ColumnMappings.Add(new ColumnMappingEntry
+                    {
+                        SourceColumn = parts[0].Trim(),
+                        TargetColumn = parts[1].Trim()
+                    });
+                }
+            }
+        }
+        _suppressMappingSync = false;
+    }
+
+    private Dictionary<string, string> BuildColumnMappingDictionary()
+    {
+        var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var entry in ColumnMappings)
+        {
+            if (string.IsNullOrWhiteSpace(entry.SourceColumn) || string.IsNullOrWhiteSpace(entry.TargetColumn)) continue;
+            dict[entry.SourceColumn] = entry.TargetColumn;
+        }
+        return dict;
+    }
+
+    private void SyncMappingsToAvailableColumns()
+    {
+        var invalid = ColumnMappings.Where(m =>
+            (!string.IsNullOrWhiteSpace(m.SourceColumn) && !SourceColumns.Contains(m.SourceColumn)) ||
+            (!string.IsNullOrWhiteSpace(m.TargetColumn) && !TargetColumns.Contains(m.TargetColumn)))
+            .ToList();
+
+        foreach (var entry in invalid) ColumnMappings.Remove(entry);
+    }
+
+    private void EnsureDefaultMappings()
+    {
+        if (ColumnMappings.Count > 0) return;
+        if (SourceColumns.Count == 0 || TargetColumns.Count == 0) return;
+
+        foreach (var sCol in SourceColumns)
+        {
+            var targetMatch = TargetColumns.FirstOrDefault(t => string.Equals(t, sCol, StringComparison.OrdinalIgnoreCase));
+            if (targetMatch != null)
+            {
+                ColumnMappings.Add(new ColumnMappingEntry { SourceColumn = sCol, TargetColumn = targetMatch });
+            }
+        }
+
+        if (ColumnMappings.Count == 0 && SourceColumns.Any() && TargetColumns.Any())
+        {
+            ColumnMappings.Add(new ColumnMappingEntry { SourceColumn = SourceColumns.First(), TargetColumn = TargetColumns.First() });
+        }
+    }
+
+    [RelayCommand]
+    private void AddMapping()
+    {
+        var sourceDefault = SourceColumns.FirstOrDefault() ?? string.Empty;
+        var targetDefault = TargetColumns.FirstOrDefault() ?? string.Empty;
+        ColumnMappings.Add(new ColumnMappingEntry { SourceColumn = sourceDefault, TargetColumn = targetDefault });
+    }
+
+    [RelayCommand]
+    private void RemoveMapping(ColumnMappingEntry? entry)
+    {
+        if (entry == null) return;
+        ColumnMappings.Remove(entry);
+    }
+
     [RelayCommand]
     private async Task CompareAsync()
     {
@@ -429,20 +599,7 @@ public partial class MainViewModel : ObservableObject
             DataTable dtSource, dtTarget;
             List<string> keys;
             List<string> ignoreCols = IgnoreColumnsInput.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()).ToList();
-            Dictionary<string, string> colMapping = new Dictionary<string, string>();
-
-            if (!string.IsNullOrWhiteSpace(ColumnMappingInput))
-            {
-                var pairs = ColumnMappingInput.Split(',', StringSplitOptions.RemoveEmptyEntries);
-                foreach (var pair in pairs)
-                {
-                    var parts = pair.Split('=');
-                    if (parts.Length == 2)
-                    {
-                        colMapping[parts[0].Trim()] = parts[1].Trim();
-                    }
-                }
-            }
+            Dictionary<string, string> colMapping = BuildColumnMappingDictionary();
 
             if (IsTableMode)
             {

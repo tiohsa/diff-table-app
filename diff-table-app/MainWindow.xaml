@@ -194,8 +194,38 @@
                                         <TextBox Text="{Binding KeysInput}"/>
                                         <TextBlock Text="Ignore Columns (comma separated):" Foreground="{StaticResource Slate600}" Margin="0,5,0,2"/>
                                         <TextBox Text="{Binding IgnoreColumnsInput}"/>
-                                        <TextBlock Text="Column Mapping (Source=Target, ...):" Foreground="{StaticResource Slate600}" Margin="0,5,0,2"/>
-                                        <TextBox Text="{Binding ColumnMappingInput}"/>
+                                        <TextBlock Text="Column Mapping (select pairs):" Foreground="{StaticResource Slate600}" Margin="0,5,0,2"/>
+                                        <StackPanel>
+                                            <ItemsControl ItemsSource="{Binding ColumnMappings}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                                            <ComboBox Width="180"
+                                                                      ItemsSource="{Binding DataContext.SourceColumns, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                      SelectedItem="{Binding SourceColumn, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                                      Margin="0,0,5,0"/>
+                                                            <TextBlock Text="→" VerticalAlignment="Center" Margin="0,0,5,0" Foreground="{StaticResource Slate600}"/>
+                                                            <ComboBox Width="180"
+                                                                      ItemsSource="{Binding DataContext.TargetColumns, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                      SelectedItem="{Binding TargetColumn, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                                      Margin="0,0,5,0"/>
+                                                            <Button Content="Remove"
+                                                                    Command="{Binding DataContext.RemoveMappingCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                    CommandParameter="{Binding}"
+                                                                    Background="{StaticResource Slate200}"
+                                                                    Padding="6,2"/>
+                                                        </StackPanel>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                            <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                                                <Button Content="Add Mapping"
+                                                        Command="{Binding AddMappingCommand}"
+                                                        Background="{StaticResource Slate500}"
+                                                        Width="120"/>
+                                                <TextBlock Text="Load schemas/tables to populate column lists." Margin="10,4,0,0" Foreground="{StaticResource Slate500}"/>
+                                            </StackPanel>
+                                        </StackPanel>
                                         <TextBlock Text="WHERE Clause (optional):" Foreground="{StaticResource Slate600}" Margin="0,5,0,2"/>
                                         <TextBox Text="{Binding WhereClause}"/>
                                     </StackPanel>
