@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
 namespace diff_table_app.Models;
@@ -25,6 +26,8 @@ public class Preset
     public string? SelectedSourceTable { get; set; }
     public string? SelectedTargetSchema { get; set; }
     public string? SelectedTargetTable { get; set; }
+    public List<string> SourceColumns { get; set; } = new();
+    public List<string> TargetColumns { get; set; } = new();
     public string KeysInput { get; set; } = string.Empty;
     public string IgnoreColumnsInput { get; set; } = string.Empty;
     public string ColumnMappingInput { get; set; } = string.Empty;

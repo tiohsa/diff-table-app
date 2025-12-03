@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.Input;
 using diff_table_app.Models;
 using diff_table_app.Services;
 using diff_table_app.Services.Interfaces;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.Data;
@@ -115,6 +116,16 @@ public partial class MainViewModel : ObservableObject
             {
                 filteredItems.Add(item);
             }
+        }
+    }
+
+    private void ApplySavedColumns(ObservableCollection<string> target, IEnumerable<string> savedColumns)
+    {
+        if (savedColumns == null) return;
+        target.Clear();
+        foreach (var column in savedColumns)
+        {
+            target.Add(column);
         }
     }
 
@@ -255,6 +266,8 @@ public partial class MainViewModel : ObservableObject
             SelectedSourceTable = SelectedSourceTable,
             SelectedTargetSchema = SelectedTargetSchema,
             SelectedTargetTable = SelectedTargetTable,
+            SourceColumns = SourceColumns.ToList(),
+            TargetColumns = TargetColumns.ToList(),
             KeysInput = KeysInput,
             IgnoreColumnsInput = IgnoreColumnsInput,
             ColumnMappingInput = ColumnMappingInput,
@@ -320,6 +333,9 @@ public partial class MainViewModel : ObservableObject
             TargetSql = value.TargetSql;
             TargetTableNameForSql = value.TargetTableNameForSql;
             ShowDiffOnly = value.ShowDiffOnly;
+
+            ApplySavedColumns(SourceColumns, value.SourceColumns);
+            ApplySavedColumns(TargetColumns, value.TargetColumns);
 
             if (IsTableMode)
             {
