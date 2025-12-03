@@ -1,0 +1,184 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- Tailwind Colors (Simplified Palette) -->
+    <!-- Slate -->
+    <SolidColorBrush x:Key="Slate50" Color="#F8FAFC"/>
+    <SolidColorBrush x:Key="Slate100" Color="#F1F5F9"/>
+    <SolidColorBrush x:Key="Slate200" Color="#E2E8F0"/>
+    <SolidColorBrush x:Key="Slate300" Color="#CBD5E1"/>
+    <SolidColorBrush x:Key="Slate400" Color="#94A3B8"/>
+    <SolidColorBrush x:Key="Slate500" Color="#64748B"/>
+    <SolidColorBrush x:Key="Slate600" Color="#475569"/>
+    <SolidColorBrush x:Key="Slate700" Color="#334155"/>
+    <SolidColorBrush x:Key="Slate800" Color="#1E293B"/>
+    <SolidColorBrush x:Key="Slate900" Color="#0F172A"/>
+
+    <!-- Blue -->
+    <SolidColorBrush x:Key="Blue500" Color="#3B82F6"/>
+    <SolidColorBrush x:Key="Blue600" Color="#2563EB"/>
+    <SolidColorBrush x:Key="Blue700" Color="#1D4ED8"/>
+
+    <!-- Green (Emerald) -->
+    <SolidColorBrush x:Key="Emerald500" Color="#10B981"/>
+    <SolidColorBrush x:Key="Emerald100" Color="#D1FAE5"/>
+
+    <!-- Red -->
+    <SolidColorBrush x:Key="Red500" Color="#EF4444"/>
+    <SolidColorBrush x:Key="Red100" Color="#FEE2E2"/>
+
+    <!-- Amber -->
+    <SolidColorBrush x:Key="Amber100" Color="#FEF3C7"/>
+
+    <!-- Converters -->
+    <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+
+    <!-- Base Styles -->
+    <Style TargetType="TextBlock">
+        <Setter Property="Foreground" Value="{StaticResource Slate800}"/>
+        <Setter Property="FontSize" Value="14"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+
+    <!-- Button Style (bg-blue-500 hover:bg-blue-600 text-white rounded p-2) -->
+    <Style TargetType="Button">
+        <Setter Property="Background" Value="{StaticResource Blue500}"/>
+        <Setter Property="Foreground" Value="White"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Padding" Value="10,5"/>
+        <Setter Property="Margin" Value="2"/>
+        <Setter Property="FontSize" Value="14"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="border" Background="{TemplateBinding Background}" CornerRadius="4" Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="border" Property="Background" Value="{StaticResource Blue600}"/>
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="border" Property="Background" Value="{StaticResource Blue700}"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="border" Property="Background" Value="{StaticResource Slate300}"/>
+                            <Setter Property="Foreground" Value="{StaticResource Slate500}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- TextBox Style (border-slate-300 focus:border-blue-500 rounded p-1) -->
+    <Style TargetType="TextBox">
+        <Setter Property="Background" Value="White"/>
+        <Setter Property="BorderBrush" Value="{StaticResource Slate300}"/>
+        <Setter Property="Foreground" Value="{StaticResource Slate800}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Padding" Value="4"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="TextBox">
+                    <Border x:Name="border" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="4">
+                        <ScrollViewer x:Name="PART_ContentHost"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="border" Property="BorderBrush" Value="{StaticResource Blue500}"/>
+                            <Setter TargetName="border" Property="BorderThickness" Value="2"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ComboBox Style -->
+    <Style TargetType="ComboBox">
+        <Setter Property="Padding" Value="4"/>
+        <Setter Property="Margin" Value="0,2"/>
+        <Setter Property="Height" Value="30"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+    </Style>
+
+    <!-- GroupBox Style (Simplified) -->
+    <Style TargetType="GroupBox">
+        <Setter Property="BorderBrush" Value="{StaticResource Slate300}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Background" Value="White"/>
+        <Setter Property="Margin" Value="0,0,0,10"/>
+        <Setter Property="Padding" Value="5"/>
+        <Setter Property="HeaderTemplate">
+            <Setter.Value>
+                <DataTemplate>
+                    <TextBlock Text="{Binding}" FontWeight="Bold" Foreground="{StaticResource Slate700}" Margin="0,0,0,5"/>
+                </DataTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- DataGrid Style -->
+    <Style TargetType="DataGrid">
+        <Setter Property="Background" Value="White"/>
+        <Setter Property="RowBackground" Value="White"/>
+        <Setter Property="AlternatingRowBackground" Value="{StaticResource Slate50}"/>
+        <Setter Property="HorizontalGridLinesBrush" Value="{StaticResource Slate200}"/>
+        <Setter Property="VerticalGridLinesBrush" Value="{StaticResource Slate200}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource Slate300}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="RowHeaderWidth" Value="0"/>
+        <Setter Property="ColumnHeaderStyle">
+            <Setter.Value>
+                <Style TargetType="DataGridColumnHeader">
+                    <Setter Property="Background" Value="{StaticResource Slate100}"/>
+                    <Setter Property="Foreground" Value="{StaticResource Slate700}"/>
+                    <Setter Property="Padding" Value="10,6"/>
+                    <Setter Property="BorderBrush" Value="{StaticResource Slate200}"/>
+                    <Setter Property="BorderThickness" Value="0,0,1,1"/>
+                    <Setter Property="FontWeight" Value="SemiBold"/>
+                </Style>
+            </Setter.Value>
+        </Setter>
+        <Setter Property="CellStyle">
+            <Setter.Value>
+                <Style TargetType="DataGridCell">
+                    <Setter Property="Padding" Value="5"/>
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="DataGridCell">
+                                <Border Padding="{TemplateBinding Padding}" Background="{TemplateBinding Background}" BorderBrush="Transparent" BorderThickness="0">
+                                    <ContentPresenter/>
+                                </Border>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                    <Style.Triggers>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter Property="Background" Value="{StaticResource Blue500}"/>
+                            <Setter Property="Foreground" Value="White"/>
+                        </Trigger>
+                    </Style.Triggers>
+                </Style>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Expander Style -->
+    <Style TargetType="Expander">
+        <Setter Property="Background" Value="White"/>
+        <Setter Property="BorderBrush" Value="{StaticResource Slate300}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="HeaderTemplate">
+            <Setter.Value>
+                <DataTemplate>
+                    <TextBlock Text="{Binding}" FontWeight="Bold" Foreground="{StaticResource Slate700}" Padding="5"/>
+                </DataTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+</ResourceDictionary>

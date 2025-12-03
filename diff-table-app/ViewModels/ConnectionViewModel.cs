@@ -1,16 +1,11 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using diff_table_app.Data;
+using diff_table_app.Models;
 using diff_table_app.Services.Interfaces;
 using System.Windows;
 
 namespace diff_table_app.ViewModels;
-
-public enum DatabaseType
-{
-    PostgreSQL,
-    Oracle
-}
 
 public partial class ConnectionViewModel : ObservableObject
 {
