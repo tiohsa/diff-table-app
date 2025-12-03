@@ -149,6 +149,24 @@
                         <TextBox Text="{Binding KeysInput}" Margin="0,2"/>
                         <TextBlock Text="Ignore Columns (comma separated):"/>
                         <TextBox Text="{Binding IgnoreColumnsInput}" Margin="0,2"/>
+                        <StackPanel Margin="0,5">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="Column Mappings:" VerticalAlignment="Center"/>
+                                <Button Content="Add Mapping" Command="{Binding AddMappingCommand}" Width="100" Margin="10,0,0,0"/>
+                            </StackPanel>
+                            <ItemsControl ItemsSource="{Binding ColumnMappings}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Horizontal" Margin="0,2">
+                                            <ComboBox Width="180" ItemsSource="{Binding DataContext.SourceColumns, RelativeSource={RelativeSource AncestorType=Window}}" SelectedItem="{Binding SourceColumn, Mode=TwoWay}" Margin="0,0,5,0"/>
+                                            <TextBlock Text="→" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                                            <ComboBox Width="180" ItemsSource="{Binding DataContext.TargetColumns, RelativeSource={RelativeSource AncestorType=Window}}" SelectedItem="{Binding TargetColumn, Mode=TwoWay}" Margin="0,0,5,0"/>
+                                            <Button Content="Remove" Command="{Binding DataContext.RemoveMappingCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}" Width="70"/>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
                         <TextBlock Text="WHERE Clause (optional):"/>
                         <TextBox Text="{Binding WhereClause}" Margin="0,2"/>
                     </StackPanel>
@@ -192,6 +210,8 @@
             <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
                 <Button Content="COMPARE" Command="{Binding CompareCommand}" Width="100" FontWeight="Bold" Background="LightBlue" Margin="5"/>
                 <Button Content="Generate SQL" Command="{Binding GenerateSqlCommand}" Width="100" Margin="5"/>
+                <Button Content="Save Preset" Command="{Binding SavePresetCommand}" Width="100" Margin="5"/>
+                <Button Content="Load Preset" Command="{Binding LoadPresetCommand}" Width="100" Margin="5"/>
                 <TextBlock Text="{Binding StatusMessage}" VerticalAlignment="Center" Margin="10,0"/>
             </StackPanel>
 

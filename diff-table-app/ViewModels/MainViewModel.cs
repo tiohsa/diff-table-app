@@ -6,7 +6,11 @@ using diff_table_app.Services.Interfaces;
 using System.Collections.ObjectModel;
 using System.Data;
 using System.IO;
+using System.Linq;
+using System.Text.Json;
+using System.Threading.Tasks;
 using System.Windows;
+using Microsoft.Win32;
 
 namespace diff_table_app.ViewModels;
 
@@ -24,17 +28,20 @@ public partial class MainViewModel : ObservableObject
     // Table Mode
     [ObservableProperty] private ObservableCollection<string> _sourceSchemas = new();
     [ObservableProperty] private ObservableCollection<string> _sourceTables = new();
+    [ObservableProperty] private ObservableCollection<string> _sourceColumns = new();
     [ObservableProperty] private string? _selectedSourceSchema;
     [ObservableProperty] private string? _selectedSourceTable;
-    
+
     [ObservableProperty] private ObservableCollection<string> _targetSchemas = new();
     [ObservableProperty] private ObservableCollection<string> _targetTables = new();
+    [ObservableProperty] private ObservableCollection<string> _targetColumns = new();
     [ObservableProperty] private string? _selectedTargetSchema;
     [ObservableProperty] private string? _selectedTargetTable;
 
     [ObservableProperty] private string _keysInput = ""; // Comma separated
     [ObservableProperty] private string _ignoreColumnsInput = ""; // Comma separated
     [ObservableProperty] private string _whereClause = "";
+    [ObservableProperty] private ObservableCollection<ColumnMapping> _columnMappings = new();
 
     // SQL Mode
     [ObservableProperty] private string _sourceSql = "SELECT * FROM ...";
@@ -94,12 +101,21 @@ public partial class MainViewModel : ObservableObject
     {
         if (value != null) LoadTablesAsync(TargetConnection, value, TargetTables).ConfigureAwait(false);
     }
-    
+
     partial void OnSelectedSourceTableChanged(string? value)
     {
         if (value != null && !string.IsNullOrEmpty(SelectedSourceSchema))
         {
              LoadKeysAsync(SourceConnection, SelectedSourceSchema, value).ConfigureAwait(false);
+             LoadColumnsAsync(SourceConnection, SelectedSourceSchema, value, SourceColumns).ConfigureAwait(false);
+        }
+    }
+
+    partial void OnSelectedTargetTableChanged(string? value)
+    {
+        if (value != null && !string.IsNullOrEmpty(SelectedTargetSchema))
+        {
+            LoadColumnsAsync(TargetConnection, SelectedTargetSchema, value, TargetColumns).ConfigureAwait(false);
         }
     }
 
@@ -121,6 +137,21 @@ public partial class MainViewModel : ObservableObject
         {
             IsBusy = false;
             StatusMessage = "Ready";
+        }
+    }
+
+    [RelayCommand]
+    private void AddMapping()
+    {
+        ColumnMappings.Add(new ColumnMapping());
+    }
+
+    [RelayCommand]
+    private void RemoveMapping(ColumnMapping? mapping)
+    {
+        if (mapping != null)
+        {
+            ColumnMappings.Remove(mapping);
         }
     }
 
@@ -173,6 +204,47 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
+    private async Task LoadColumnsAsync(ConnectionViewModel connVm, string schema, string table, ObservableCollection<string> collection)
+    {
+        try
+        {
+            using var client = connVm.CreateClient();
+            await client.ConnectAsync(connVm.GetConnectionString());
+            var columns = await client.GetColumnsAsync(schema, table);
+            Application.Current.Dispatcher.Invoke(() =>
+            {
+                collection.Clear();
+                foreach (var col in columns)
+                {
+                    collection.Add(col.Name);
+                }
+            });
+        }
+        catch
+        {
+            // ignore
+        }
+    }
+
+    private void ApplyColumnMappings(DataTable source, DataTable target, List<ColumnMapping> mappings)
+    {
+        foreach (var mapping in mappings)
+        {
+            if (string.IsNullOrWhiteSpace(mapping.SourceColumn) || string.IsNullOrWhiteSpace(mapping.TargetColumn)) continue;
+            if (!source.Columns.Contains(mapping.SourceColumn) || !target.Columns.Contains(mapping.TargetColumn)) continue;
+
+            if (!target.Columns.Contains(mapping.SourceColumn))
+            {
+                target.Columns.Add(mapping.SourceColumn, target.Columns[mapping.TargetColumn].DataType);
+            }
+
+            foreach (DataRow row in target.Rows)
+            {
+                row[mapping.SourceColumn] = row[mapping.TargetColumn];
+            }
+        }
+    }
+
     [RelayCommand]
     private async Task CompareAsync()
     {
@@ -183,6 +255,7 @@ public partial class MainViewModel : ObservableObject
             DataTable dtSource, dtTarget;
             List<string> keys;
             List<string> ignoreCols = IgnoreColumnsInput.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()).ToList();
+            var mappings = ColumnMappings.Where(m => !string.IsNullOrWhiteSpace(m.SourceColumn) && !string.IsNullOrWhiteSpace(m.TargetColumn)).ToList();
 
             if (IsTableMode)
             {
@@ -222,6 +295,8 @@ public partial class MainViewModel : ObservableObject
                 await tClient.ConnectAsync(TargetConnection.GetConnectionString());
                 dtTarget = await tClient.ExecuteQueryAsync(TargetSql);
             }
+
+            ApplyColumnMappings(dtSource, dtTarget, mappings);
 
             DiffResult = await Task.Run(() => _diffService.Compare(dtSource, dtTarget, keys, ignoreCols));
             StatusMessage = $"Diff Complete. Added: {DiffResult.AddedCount}, Deleted: {DiffResult.DeletedCount}, Modified: {DiffResult.ModifiedCount}";
@@ -269,5 +344,114 @@ public partial class MainViewModel : ObservableObject
         {
             MessageBox.Show($"Error: {ex.Message}");
         }
+    }
+
+    [RelayCommand]
+    private async Task SavePresetAsync()
+    {
+        var dialog = new SaveFileDialog { Filter = "Preset Files|*.json", FileName = "preset.json" };
+        if (dialog.ShowDialog() != true) return;
+
+        var preset = BuildPreset();
+        var json = JsonSerializer.Serialize(preset, new JsonSerializerOptions { WriteIndented = true });
+        await File.WriteAllTextAsync(dialog.FileName, json);
+        MessageBox.Show("Preset saved.");
+    }
+
+    [RelayCommand]
+    private async Task LoadPresetAsync()
+    {
+        var dialog = new OpenFileDialog { Filter = "Preset Files|*.json" };
+        if (dialog.ShowDialog() != true) return;
+
+        var json = await File.ReadAllTextAsync(dialog.FileName);
+        var preset = JsonSerializer.Deserialize<Preset>(json);
+        if (preset == null) return;
+
+        await ApplyPresetAsync(preset);
+        MessageBox.Show("Preset loaded.");
+    }
+
+    private Preset BuildPreset()
+    {
+        return new Preset
+        {
+            SourceConnection = BuildConnectionPreset(SourceConnection),
+            TargetConnection = BuildConnectionPreset(TargetConnection),
+            SelectedSourceSchema = SelectedSourceSchema,
+            SelectedSourceTable = SelectedSourceTable,
+            SelectedTargetSchema = SelectedTargetSchema,
+            SelectedTargetTable = SelectedTargetTable,
+            KeysInput = KeysInput,
+            IgnoreColumnsInput = IgnoreColumnsInput,
+            WhereClause = WhereClause,
+            SourceSql = SourceSql,
+            TargetSql = TargetSql,
+            TargetTableNameForSql = TargetTableNameForSql,
+            ColumnMappings = ColumnMappings.Select(m => new ColumnMapping { SourceColumn = m.SourceColumn, TargetColumn = m.TargetColumn }).ToList()
+        };
+    }
+
+    private ConnectionPreset BuildConnectionPreset(ConnectionViewModel vm)
+    {
+        return new ConnectionPreset
+        {
+            SelectedType = vm.SelectedType,
+            Host = vm.Host,
+            Port = vm.Port,
+            User = vm.User,
+            Password = vm.Password,
+            Database = vm.Database,
+            ServiceName = vm.ServiceName
+        };
+    }
+
+    private async Task ApplyPresetAsync(Preset preset)
+    {
+        ApplyConnectionPreset(SourceConnection, preset.SourceConnection);
+        ApplyConnectionPreset(TargetConnection, preset.TargetConnection);
+
+        await LoadSchemaListAsync(SourceConnection, SourceSchemas);
+        await LoadSchemaListAsync(TargetConnection, TargetSchemas);
+
+        SelectedSourceSchema = preset.SelectedSourceSchema;
+        SelectedTargetSchema = preset.SelectedTargetSchema;
+
+        if (!string.IsNullOrEmpty(preset.SelectedSourceSchema))
+        {
+            await LoadTablesAsync(SourceConnection, preset.SelectedSourceSchema, SourceTables);
+        }
+
+        if (!string.IsNullOrEmpty(preset.SelectedTargetSchema))
+        {
+            await LoadTablesAsync(TargetConnection, preset.SelectedTargetSchema, TargetTables);
+        }
+
+        SelectedSourceTable = preset.SelectedSourceTable;
+        SelectedTargetTable = preset.SelectedTargetTable;
+
+        KeysInput = preset.KeysInput;
+        IgnoreColumnsInput = preset.IgnoreColumnsInput;
+        WhereClause = preset.WhereClause;
+        SourceSql = preset.SourceSql;
+        TargetSql = preset.TargetSql;
+        TargetTableNameForSql = preset.TargetTableNameForSql;
+
+        ColumnMappings.Clear();
+        foreach (var mapping in preset.ColumnMappings ?? Enumerable.Empty<ColumnMapping>())
+        {
+            ColumnMappings.Add(new ColumnMapping { SourceColumn = mapping.SourceColumn, TargetColumn = mapping.TargetColumn });
+        }
+    }
+
+    private void ApplyConnectionPreset(ConnectionViewModel vm, ConnectionPreset preset)
+    {
+        vm.SelectedType = preset.SelectedType;
+        vm.Host = preset.Host;
+        vm.Port = preset.Port;
+        vm.User = preset.User;
+        vm.Password = preset.Password;
+        vm.Database = preset.Database;
+        vm.ServiceName = preset.ServiceName;
     }
 }
