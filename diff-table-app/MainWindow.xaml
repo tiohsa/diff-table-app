@@ -226,7 +226,12 @@
                                                         Command="{Binding AddMappingCommand}"
                                                         Background="{StaticResource Slate500}"
                                                         Width="120"/>
-                                                <TextBlock Text="Load schemas/tables to populate column lists." Margin="10,4,0,0" Foreground="{StaticResource Slate500}"/>
+                                                <Button Content="Load Columns"
+                                                        Command="{Binding LoadColumnsForMappingCommand}"
+                                                        Background="{StaticResource Slate500}"
+                                                        Margin="8,0,0,0"
+                                                        Width="140"/>
+                                                <TextBlock Text="Load schemas/tables, then fetch columns from the database." Margin="10,4,0,0" Foreground="{StaticResource Slate500}"/>
                                             </StackPanel>
                                         </StackPanel>
                                         <TextBlock Text="WHERE Clause (optional):" Foreground="{StaticResource Slate600}" Margin="0,5,0,2"/>
