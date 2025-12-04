@@ -20,15 +20,17 @@
             </ObjectDataProvider.MethodParameters>
         </ObjectDataProvider>
         <Style TargetType="DataGridRow">
+            <Setter Property="Foreground" Value="{StaticResource Slate900}"/>
+            <Setter Property="FontSize" Value="13"/>
             <Style.Triggers>
                 <DataTrigger Binding="{Binding Status}" Value="Added">
-                    <Setter Property="Background" Value="{StaticResource Emerald100}"/>
+                    <Setter Property="Background" Value="{StaticResource Emerald50}"/>
                 </DataTrigger>
                 <DataTrigger Binding="{Binding Status}" Value="Deleted">
-                    <Setter Property="Background" Value="{StaticResource Red100}"/>
+                    <Setter Property="Background" Value="{StaticResource Rose50}"/>
                 </DataTrigger>
                 <DataTrigger Binding="{Binding Status}" Value="Modified">
-                    <Setter Property="Background" Value="{StaticResource Amber100}"/>
+                    <Setter Property="Background" Value="{StaticResource Amber50}"/>
                 </DataTrigger>
             </Style.Triggers>
         </Style>
@@ -213,6 +215,7 @@
                                                                     Command="{Binding DataContext.RemoveMappingCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                                                     CommandParameter="{Binding}"
                                                                     Background="{StaticResource Slate200}"
+                                                                    Foreground="{StaticResource Slate800}"
                                                                     Padding="6,2"/>
                                                         </StackPanel>
                                                     </DataTemplate>
@@ -273,9 +276,54 @@
 
                 <!-- Right Panel: DataGrid -->
                 <Grid Grid.Column="2" Margin="10,0,0,0">
-                    <DataGrid ItemsSource="{Binding ResultView}" AutoGenerateColumns="True" IsReadOnly="True"
+                    <DataGrid ItemsSource="{Binding ResultView}" AutoGenerateColumns="False" IsReadOnly="True"
                               EnableRowVirtualization="True" EnableColumnVirtualization="True"
-                              GridLinesVisibility="All">
+                              GridLinesVisibility="All" RowHeight="Auto" ColumnWidth="*">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="90" IsReadOnly="True"/>
+                            <DataGridTextColumn Header="Key" Binding="{Binding KeySummary}" Width="220" IsReadOnly="True"/>
+                            <DataGridTextColumn Header="Column" Binding="{Binding Column}" Width="160" IsReadOnly="True"/>
+                            <DataGridTemplateColumn Header="Values" Width="*">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding SourceValue, TargetNullValue='(null)'}" TextWrapping="Wrap" FontWeight="SemiBold">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Foreground" Value="{StaticResource Slate700}"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding Status}" Value="Added">
+                                                                <Setter Property="Foreground" Value="{StaticResource Slate400}"/>
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding IsChanged}" Value="True">
+                                                                <Setter Property="Foreground" Value="{StaticResource DiffOldBrush}"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                            <Border Background="{StaticResource Slate50}" Padding="6,4" CornerRadius="4" Margin="0,4,0,0">
+                                                <TextBlock Text="{Binding TargetValue, TargetNullValue='(null)'}" TextWrapping="Wrap">
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock">
+                                                            <Setter Property="Foreground" Value="{StaticResource Slate800}"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding Status}" Value="Deleted">
+                                                                    <Setter Property="Foreground" Value="{StaticResource Slate400}"/>
+                                                                </DataTrigger>
+                                                                <DataTrigger Binding="{Binding IsChanged}" Value="True">
+                                                                    <Setter Property="Foreground" Value="{StaticResource DiffNewBrush}"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
+                                            </Border>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                        </DataGrid.Columns>
                     </DataGrid>
                 </Grid>
             </Grid>

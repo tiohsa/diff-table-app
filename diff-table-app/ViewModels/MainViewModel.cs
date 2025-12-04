@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.Input;
 using diff_table_app.Models;
 using diff_table_app.Services;
 using diff_table_app.Services.Interfaces;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.Data;
@@ -118,21 +119,27 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
-    partial void OnShowDiffOnlyChanged(bool value)
+    private void ApplySavedColumns(ObservableCollection<string> target, IEnumerable<string> savedColumns)
     {
-        // Re-apply filter on ResultView
-        if (ResultView != null)
+        if (savedColumns == null) return;
+        target.Clear();
+        foreach (var column in savedColumns)
         {
-            if (value)
-            {
-                ResultView.RowFilter = "Status <> 'Unchanged'";
-            }
-            else
-            {
-                ResultView.RowFilter = "";
-            }
+            target.Add(column);
         }
     }
+
+    private void ApplyResultFilter(DataView? view = null)
+    {
+        var targetView = view ?? ResultView;
+        if (targetView == null) return;
+
+        targetView.RowFilter = ShowDiffOnly
+            ? "IsChanged = true OR Status <> 'Unchanged'"
+            : string.Empty;
+    }
+
+    partial void OnShowDiffOnlyChanged(bool value) => ApplyResultFilter();
 
     partial void OnColumnMappingInputChanged(string value)
     {
@@ -150,63 +157,82 @@ public partial class MainViewModel : ObservableObject
 
         var dt = new DataTable();
         dt.Columns.Add("Status", typeof(string));
-        
-        foreach (var col in value.Columns)
-        {
-            dt.Columns.Add(col, typeof(object));
-        }
+        dt.Columns.Add("KeySummary", typeof(string));
+        dt.Columns.Add("Column", typeof(string));
+        dt.Columns.Add("SourceValue", typeof(object));
+        dt.Columns.Add("TargetValue", typeof(object));
+        dt.Columns.Add("IsChanged", typeof(bool));
 
         foreach (var row in value.Rows)
         {
-            var dr = dt.NewRow();
-            dr["Status"] = row.Status.ToString();
-            foreach (var col in value.Columns)
+            var keySummary = row.KeyValues.Count == 0
+                ? string.Empty
+                : string.Join(", ", row.KeyValues.Select(kv => $"{kv.Key}={FormatValue(kv.Value)}"));
+
+            foreach (var columnName in value.Columns)
             {
-                if (row.ColumnDiffs.TryGetValue(col, out var cellDiff))
+                if (!row.ColumnDiffs.TryGetValue(columnName, out var cellDiff))
                 {
-                    if (row.Status == RowStatus.Deleted)
-                        dr[col] = cellDiff.OldValue;
-                    else
-                        dr[col] = cellDiff.NewValue;
+                    continue;
                 }
+
+                var dr = dt.NewRow();
+                dr["Status"] = row.Status.ToString();
+                dr["KeySummary"] = keySummary;
+                dr["Column"] = columnName;
+                dr["SourceValue"] = row.Status == RowStatus.Added ? null : cellDiff.OldValue;
+                dr["TargetValue"] = row.Status == RowStatus.Deleted ? null : cellDiff.NewValue;
+                dr["IsChanged"] = row.Status != RowStatus.Unchanged || cellDiff.IsChanged;
+                dt.Rows.Add(dr);
             }
-            dt.Rows.Add(dr);
         }
 
         var view = dt.DefaultView;
-        if (ShowDiffOnly)
-        {
-            view.RowFilter = "Status <> 'Unchanged'";
-        }
+        ApplyResultFilter(view);
         ResultView = view;
     }
+
+    private static string FormatValue(object? value) => value switch
+    {
+        null => "NULL",
+        DBNull => "NULL",
+        DateTime dt => dt.ToString("s"),
+        _ => value?.ToString() ?? string.Empty
+    };
 
     partial void OnSelectedSourceSchemaChanged(string? value)
     {
         if (_isPresetLoading) return;
+        SourceColumns.Clear();
+        ColumnMappings.Clear();
         if (value != null) LoadTablesAsync(SourceConnection, value, _allSourceTables, SourceTables).ConfigureAwait(false);
     }
 
     partial void OnSelectedTargetSchemaChanged(string? value)
     {
         if (_isPresetLoading) return;
+        TargetColumns.Clear();
+        ColumnMappings.Clear();
         if (value != null) LoadTablesAsync(TargetConnection, value, _allTargetTables, TargetTables).ConfigureAwait(false);
     }
-    
+
     partial void OnSelectedTargetTableChanged(string? value)
     {
         if (!string.IsNullOrEmpty(value) && !string.IsNullOrEmpty(SelectedTargetSchema))
         {
-            LoadColumnsAsync(TargetConnection, SelectedTargetSchema, value, TargetColumns).ConfigureAwait(false);
+            TargetColumns.Clear();
+            ColumnMappings.Clear();
+            RefreshColumnOptionsAsync().ConfigureAwait(false);
         }
     }
-    
+
     partial void OnSelectedSourceTableChanged(string? value)
     {
         if (!string.IsNullOrEmpty(value) && !string.IsNullOrEmpty(SelectedSourceSchema))
         {
-             LoadKeysAsync(SourceConnection, SelectedSourceSchema, value).ConfigureAwait(false);
-             LoadColumnsAsync(SourceConnection, SelectedSourceSchema, value, SourceColumns).ConfigureAwait(false);
+            SourceColumns.Clear();
+            ColumnMappings.Clear();
+            RefreshColumnOptionsAsync().ConfigureAwait(false);
         }
     }
 
@@ -255,6 +281,8 @@ public partial class MainViewModel : ObservableObject
             SelectedSourceTable = SelectedSourceTable,
             SelectedTargetSchema = SelectedTargetSchema,
             SelectedTargetTable = SelectedTargetTable,
+            SourceColumns = SourceColumns.ToList(),
+            TargetColumns = TargetColumns.ToList(),
             KeysInput = KeysInput,
             IgnoreColumnsInput = IgnoreColumnsInput,
             ColumnMappingInput = ColumnMappingInput,
@@ -321,6 +349,9 @@ public partial class MainViewModel : ObservableObject
             TargetTableNameForSql = value.TargetTableNameForSql;
             ShowDiffOnly = value.ShowDiffOnly;
 
+            ApplySavedColumns(SourceColumns, value.SourceColumns);
+            ApplySavedColumns(TargetColumns, value.TargetColumns);
+
             if (IsTableMode)
             {
                 // Load Schemas
@@ -342,6 +373,8 @@ public partial class MainViewModel : ObservableObject
                     await LoadTablesAsync(TargetConnection, SelectedTargetSchema, _allTargetTables, TargetTables);
                     SelectedTargetTable = value.SelectedTargetTable;
                 }
+
+                await RefreshColumnOptionsAsync();
             }
         }
         finally
@@ -458,6 +491,27 @@ public partial class MainViewModel : ObservableObject
         catch (Exception ex)
         {
             _logger.LogError($"Error loading columns for {schema}.{table}.", ex);
+        }
+    }
+
+    private async Task RefreshColumnOptionsAsync()
+    {
+        var tasks = new List<Task>();
+
+        if (!string.IsNullOrEmpty(SelectedSourceSchema) && !string.IsNullOrEmpty(SelectedSourceTable))
+        {
+            tasks.Add(LoadKeysAsync(SourceConnection, SelectedSourceSchema, SelectedSourceTable));
+            tasks.Add(LoadColumnsAsync(SourceConnection, SelectedSourceSchema, SelectedSourceTable, SourceColumns));
+        }
+
+        if (!string.IsNullOrEmpty(SelectedTargetSchema) && !string.IsNullOrEmpty(SelectedTargetTable))
+        {
+            tasks.Add(LoadColumnsAsync(TargetConnection, SelectedTargetSchema, SelectedTargetTable, TargetColumns));
+        }
+
+        if (tasks.Count > 0)
+        {
+            await Task.WhenAll(tasks);
         }
     }
 
