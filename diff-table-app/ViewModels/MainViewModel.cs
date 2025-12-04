@@ -49,6 +49,8 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty] private ObservableCollection<string> _targetSchemas = new();
     [ObservableProperty] private ObservableCollection<string> _targetTables = new();
     [ObservableProperty] private ObservableCollection<string> _targetColumns = new();
+
+    private List<ColumnInfo> _sourceColumnInfos = new();
     [ObservableProperty] private string? _selectedTargetSchema;
     [ObservableProperty] private string? _selectedTargetTable;
 
@@ -519,7 +521,7 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
-    private async Task LoadColumnsAsync(ConnectionViewModel connVm, string schema, string table, ObservableCollection<string> targetCollection)
+    private async Task LoadColumnsAsync(ConnectionViewModel connVm, string schema, string table, ObservableCollection<string> targetCollection, List<ColumnInfo>? infoCollection = null)
     {
         try
         {
@@ -529,7 +531,12 @@ public partial class MainViewModel : ObservableObject
             Application.Current.Dispatcher.Invoke(() =>
             {
                 targetCollection.Clear();
-                foreach (var col in cols) targetCollection.Add(col.Name);
+                infoCollection?.Clear();
+                foreach (var col in cols)
+                {
+                    targetCollection.Add(col.Name);
+                    infoCollection?.Add(col);
+                }
             });
         }
         catch (Exception ex)
@@ -545,7 +552,7 @@ public partial class MainViewModel : ObservableObject
         if (!string.IsNullOrEmpty(SelectedSourceSchema) && !string.IsNullOrEmpty(SelectedSourceTable))
         {
             tasks.Add(LoadKeysAsync(SourceConnection, SelectedSourceSchema, SelectedSourceTable));
-            tasks.Add(LoadColumnsAsync(SourceConnection, SelectedSourceSchema, SelectedSourceTable, SourceColumns));
+            tasks.Add(LoadColumnsAsync(SourceConnection, SelectedSourceSchema, SelectedSourceTable, SourceColumns, _sourceColumnInfos));
         }
 
         if (!string.IsNullOrEmpty(SelectedTargetSchema) && !string.IsNullOrEmpty(SelectedTargetTable))
@@ -562,36 +569,42 @@ public partial class MainViewModel : ObservableObject
 
     private void AlignMappingsWithSourceColumns()
     {
-        _suppressMappingSync = true;
-
-        var existingTargets = ColumnMappings
-            .Where(m => !string.IsNullOrWhiteSpace(m.SourceColumn))
-            .ToDictionary(m => m.SourceColumn, m => m.TargetColumn, StringComparer.OrdinalIgnoreCase);
-
-        ColumnMappings.Clear();
-
-        foreach (var source in SourceColumns)
+        Application.Current.Dispatcher.Invoke(() =>
         {
-            string? target = null;
+            _suppressMappingSync = true;
 
-            if (existingTargets.TryGetValue(source, out var mappedTarget) && TargetColumns.Contains(mappedTarget))
+            var existingTargets = ColumnMappings
+                .Where(m => !string.IsNullOrWhiteSpace(m.SourceColumn))
+                .ToDictionary(m => m.SourceColumn, m => m.TargetColumn, StringComparer.OrdinalIgnoreCase);
+
+            ColumnMappings.Clear();
+
+            foreach (var source in SourceColumns)
             {
-                target = mappedTarget;
+                string? target = null;
+
+                if (existingTargets.TryGetValue(source, out var mappedTarget) && TargetColumns.Contains(mappedTarget))
+                {
+                    target = mappedTarget;
+                }
+                else
+                {
+                    target = TargetColumns.FirstOrDefault(t => string.Equals(t, source, StringComparison.OrdinalIgnoreCase));
+                }
+
+                var info = _sourceColumnInfos.FirstOrDefault(c => c.Name == source);
+                ColumnMappings.Add(new ColumnMappingEntry
+                {
+                    SourceColumn = source,
+                    TargetColumn = target ?? string.Empty,
+                    SourceDataType = info?.DataType ?? string.Empty,
+                    IsPrimaryKey = info?.IsPrimaryKey ?? false
+                });
             }
-            else
-            {
-                target = TargetColumns.FirstOrDefault(t => string.Equals(t, source, StringComparison.OrdinalIgnoreCase));
-            }
 
-            ColumnMappings.Add(new ColumnMappingEntry
-            {
-                SourceColumn = source,
-                TargetColumn = target ?? string.Empty
-            });
-        }
-
-        _suppressMappingSync = false;
-        SyncColumnMappingString();
+            _suppressMappingSync = false;
+            SyncColumnMappingString();
+        });
     }
 
     private void HookColumnMappingEvents()

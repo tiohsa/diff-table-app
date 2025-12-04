@@ -218,7 +218,7 @@
                                                                     <ColumnDefinition Width="Auto"/>
                                                                     <ColumnDefinition Width="2*"/>
                                                                 </Grid.ColumnDefinitions>
-                                                                <TextBlock Text="{Binding SourceColumn}" VerticalAlignment="Center" Padding="8,4" Background="White" Grid.Column="0"/>
+                                                                <TextBlock Text="{Binding SourceColumnDisplay}" VerticalAlignment="Center" Padding="8,4" Background="White" Grid.Column="0" ToolTip="{Binding SourceColumnDisplay}"/>
                                                                 <TextBlock Text="→" VerticalAlignment="Center" Margin="8,0" Foreground="{StaticResource Slate600}" Grid.Column="1"/>
                                                                 <ComboBox Width="200"
                                                                           ItemsSource="{Binding DataContext.TargetColumns, RelativeSource={RelativeSource AncestorType=Window}}"
