@@ -278,7 +278,7 @@
                 <Grid Grid.Column="2" Margin="10,0,0,0">
                     <DataGrid ItemsSource="{Binding ResultView}" AutoGenerateColumns="False" IsReadOnly="True"
                               EnableRowVirtualization="True" EnableColumnVirtualization="True"
-                              GridLinesVisibility="All" RowHeight="Auto" ColumnWidth="*">
+                              GridLinesVisibility="All" ColumnWidth="*">
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="90" IsReadOnly="True"/>
                             <DataGridTextColumn Header="Key" Binding="{Binding KeySummary}" Width="220" IsReadOnly="True"/>
