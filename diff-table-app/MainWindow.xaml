@@ -196,42 +196,46 @@
                                         <TextBox Text="{Binding KeysInput}"/>
                                         <TextBlock Text="Ignore Columns (comma separated):" Foreground="{StaticResource Slate600}" Margin="0,5,0,2"/>
                                         <TextBox Text="{Binding IgnoreColumnsInput}"/>
-                                        <TextBlock Text="Column Mapping (select pairs):" Foreground="{StaticResource Slate600}" Margin="0,5,0,2"/>
+                                        <TextBlock Text="Column Mapping" Foreground="{StaticResource Slate600}" Margin="0,5,0,2"/>
                                         <StackPanel>
-                                            <ItemsControl ItemsSource="{Binding ColumnMappings}">
-                                                <ItemsControl.ItemTemplate>
-                                                    <DataTemplate>
-                                                        <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
-                                                            <ComboBox Width="180"
-                                                                      ItemsSource="{Binding DataContext.SourceColumns, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                                      SelectedItem="{Binding SourceColumn, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                                      Margin="0,0,5,0"/>
-                                                            <TextBlock Text="→" VerticalAlignment="Center" Margin="0,0,5,0" Foreground="{StaticResource Slate600}"/>
-                                                            <ComboBox Width="180"
-                                                                      ItemsSource="{Binding DataContext.TargetColumns, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                                      SelectedItem="{Binding TargetColumn, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                                      Margin="0,0,5,0"/>
-                                                            <Button Content="Remove"
-                                                                    Command="{Binding DataContext.RemoveMappingCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                                    CommandParameter="{Binding}"
-                                                                    Background="{StaticResource Slate200}"
-                                                                    Foreground="{StaticResource Slate800}"
-                                                                    Padding="6,2"/>
-                                                        </StackPanel>
-                                                    </DataTemplate>
-                                                </ItemsControl.ItemTemplate>
-                                            </ItemsControl>
+                                            <Grid Margin="0,0,0,4">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="2*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="2*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="Source Column" Foreground="{StaticResource Slate500}" Grid.Column="0"/>
+                                                <TextBlock Text="Map" Foreground="{StaticResource Slate500}" Grid.Column="1" HorizontalAlignment="Center"/>
+                                                <TextBlock Text="Target Column" Foreground="{StaticResource Slate500}" Grid.Column="2"/>
+                                            </Grid>
+                                            <Border BorderBrush="{StaticResource Slate200}" BorderThickness="1" CornerRadius="6" Padding="8" Background="{StaticResource Slate50}">
+                                                <ItemsControl ItemsSource="{Binding ColumnMappings}">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate>
+                                                            <Grid Margin="0,4,0,4">
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="2*"/>
+                                                                    <ColumnDefinition Width="Auto"/>
+                                                                    <ColumnDefinition Width="2*"/>
+                                                                </Grid.ColumnDefinitions>
+                                                                <TextBlock Text="{Binding SourceColumn}" VerticalAlignment="Center" Padding="8,4" Background="White" Grid.Column="0"/>
+                                                                <TextBlock Text="→" VerticalAlignment="Center" Margin="8,0" Foreground="{StaticResource Slate600}" Grid.Column="1"/>
+                                                                <ComboBox Width="200"
+                                                                          ItemsSource="{Binding DataContext.TargetColumns, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                          SelectedItem="{Binding TargetColumn, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                                          Margin="0,0,0,0"
+                                                                          Grid.Column="2"/>
+                                                            </Grid>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </Border>
                                             <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
-                                                <Button Content="Add Mapping"
-                                                        Command="{Binding AddMappingCommand}"
-                                                        Background="{StaticResource Slate500}"
-                                                        Width="120"/>
                                                 <Button Content="Load Columns"
                                                         Command="{Binding LoadColumnsForMappingCommand}"
                                                         Background="{StaticResource Slate500}"
-                                                        Margin="8,0,0,0"
                                                         Width="140"/>
-                                                <TextBlock Text="Load schemas/tables, then fetch columns from the database." Margin="10,4,0,0" Foreground="{StaticResource Slate500}"/>
+                                                <TextBlock Text="Load schemas/tables to fetch columns, then map each source column." Margin="10,4,0,0" Foreground="{StaticResource Slate500}"/>
                                             </StackPanel>
                                         </StackPanel>
                                         <TextBlock Text="WHERE Clause (optional):" Foreground="{StaticResource Slate600}" Margin="0,5,0,2"/>
