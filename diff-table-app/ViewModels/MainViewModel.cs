@@ -414,6 +414,41 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
+    [RelayCommand]
+    private async Task LoadColumnsForMappingAsync()
+    {
+        if (!IsTableMode)
+        {
+            MessageBox.Show("Column lists can be loaded in Table mode.");
+            return;
+        }
+
+        if (string.IsNullOrEmpty(SelectedSourceSchema) || string.IsNullOrEmpty(SelectedSourceTable) ||
+            string.IsNullOrEmpty(SelectedTargetSchema) || string.IsNullOrEmpty(SelectedTargetTable))
+        {
+            MessageBox.Show("Please select schemas and tables before loading columns.");
+            return;
+        }
+
+        IsBusy = true;
+        StatusMessage = "Loading Columns...";
+        try
+        {
+            await RefreshColumnOptionsAsync();
+            StatusMessage = "Columns loaded from database.";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError("Error loading columns for mapping.", ex);
+            MessageBox.Show(ex.Message);
+            StatusMessage = "Error loading columns";
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
     private async Task LoadSchemaListAsync(ConnectionViewModel connVm, ObservableCollection<string> allCollection, ObservableCollection<string> filteredCollection)
     {
         using var client = connVm.CreateClient();
