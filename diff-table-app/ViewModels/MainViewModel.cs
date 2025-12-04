@@ -145,6 +145,10 @@ public partial class MainViewModel : ObservableObject
     {
         if (_suppressMappingSync) return;
         ApplyMappingString(value);
+        if (SourceColumns.Any())
+        {
+            AlignMappingsWithSourceColumns();
+        }
     }
 
     partial void OnDiffResultChanged(DiffResult? value)
@@ -527,8 +531,6 @@ public partial class MainViewModel : ObservableObject
                 targetCollection.Clear();
                 foreach (var col in cols) targetCollection.Add(col.Name);
             });
-            SyncMappingsToAvailableColumns();
-            EnsureDefaultMappings();
         }
         catch (Exception ex)
         {
@@ -554,7 +556,42 @@ public partial class MainViewModel : ObservableObject
         if (tasks.Count > 0)
         {
             await Task.WhenAll(tasks);
+            AlignMappingsWithSourceColumns();
         }
+    }
+
+    private void AlignMappingsWithSourceColumns()
+    {
+        _suppressMappingSync = true;
+
+        var existingTargets = ColumnMappings
+            .Where(m => !string.IsNullOrWhiteSpace(m.SourceColumn))
+            .ToDictionary(m => m.SourceColumn, m => m.TargetColumn, StringComparer.OrdinalIgnoreCase);
+
+        ColumnMappings.Clear();
+
+        foreach (var source in SourceColumns)
+        {
+            string? target = null;
+
+            if (existingTargets.TryGetValue(source, out var mappedTarget) && TargetColumns.Contains(mappedTarget))
+            {
+                target = mappedTarget;
+            }
+            else
+            {
+                target = TargetColumns.FirstOrDefault(t => string.Equals(t, source, StringComparison.OrdinalIgnoreCase));
+            }
+
+            ColumnMappings.Add(new ColumnMappingEntry
+            {
+                SourceColumn = source,
+                TargetColumn = target ?? string.Empty
+            });
+        }
+
+        _suppressMappingSync = false;
+        SyncColumnMappingString();
     }
 
     private void HookColumnMappingEvents()
@@ -637,36 +674,6 @@ public partial class MainViewModel : ObservableObject
             dict[entry.SourceColumn] = entry.TargetColumn;
         }
         return dict;
-    }
-
-    private void SyncMappingsToAvailableColumns()
-    {
-        var invalid = ColumnMappings.Where(m =>
-            (!string.IsNullOrWhiteSpace(m.SourceColumn) && !SourceColumns.Contains(m.SourceColumn)) ||
-            (!string.IsNullOrWhiteSpace(m.TargetColumn) && !TargetColumns.Contains(m.TargetColumn)))
-            .ToList();
-
-        foreach (var entry in invalid) ColumnMappings.Remove(entry);
-    }
-
-    private void EnsureDefaultMappings()
-    {
-        if (ColumnMappings.Count > 0) return;
-        if (SourceColumns.Count == 0 || TargetColumns.Count == 0) return;
-
-        foreach (var sCol in SourceColumns)
-        {
-            var targetMatch = TargetColumns.FirstOrDefault(t => string.Equals(t, sCol, StringComparison.OrdinalIgnoreCase));
-            if (targetMatch != null)
-            {
-                ColumnMappings.Add(new ColumnMappingEntry { SourceColumn = sCol, TargetColumn = targetMatch });
-            }
-        }
-
-        if (ColumnMappings.Count == 0 && SourceColumns.Any() && TargetColumns.Any())
-        {
-            ColumnMappings.Add(new ColumnMappingEntry { SourceColumn = SourceColumns.First(), TargetColumn = TargetColumns.First() });
-        }
     }
 
     [RelayCommand]
