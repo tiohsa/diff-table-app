@@ -322,6 +322,9 @@ public partial class MainViewModel : ObservableObject
         _isPresetLoading = true;
         try
         {
+            SourceColumns.Clear();
+            TargetColumns.Clear();
+
             SourceConnection.SelectedType = value.SourceConnection.SelectedType;
             SourceConnection.Host = value.SourceConnection.Host;
             SourceConnection.Port = value.SourceConnection.Port;
@@ -348,9 +351,6 @@ public partial class MainViewModel : ObservableObject
             TargetSql = value.TargetSql;
             TargetTableNameForSql = value.TargetTableNameForSql;
             ShowDiffOnly = value.ShowDiffOnly;
-
-            ApplySavedColumns(SourceColumns, value.SourceColumns);
-            ApplySavedColumns(TargetColumns, value.TargetColumns);
 
             if (IsTableMode)
             {
@@ -417,17 +417,22 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     private async Task LoadColumnsForMappingAsync()
     {
+        await LoadColumnsFromDatabaseAsync();
+    }
+
+    private async Task<bool> LoadColumnsFromDatabaseAsync()
+    {
         if (!IsTableMode)
         {
             MessageBox.Show("Column lists can be loaded in Table mode.");
-            return;
+            return false;
         }
 
         if (string.IsNullOrEmpty(SelectedSourceSchema) || string.IsNullOrEmpty(SelectedSourceTable) ||
             string.IsNullOrEmpty(SelectedTargetSchema) || string.IsNullOrEmpty(SelectedTargetTable))
         {
             MessageBox.Show("Please select schemas and tables before loading columns.");
-            return;
+            return false;
         }
 
         IsBusy = true;
@@ -436,12 +441,14 @@ public partial class MainViewModel : ObservableObject
         {
             await RefreshColumnOptionsAsync();
             StatusMessage = "Columns loaded from database.";
+            return true;
         }
         catch (Exception ex)
         {
             _logger.LogError("Error loading columns for mapping.", ex);
             MessageBox.Show(ex.Message);
             StatusMessage = "Error loading columns";
+            return false;
         }
         finally
         {
@@ -663,8 +670,14 @@ public partial class MainViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void AddMapping()
+    private async Task AddMappingAsync()
     {
+        if (SourceColumns.Count == 0 || TargetColumns.Count == 0)
+        {
+            var loaded = await LoadColumnsFromDatabaseAsync();
+            if (!loaded) return;
+        }
+
         var sourceDefault = SourceColumns.FirstOrDefault() ?? string.Empty;
         var targetDefault = TargetColumns.FirstOrDefault() ?? string.Empty;
         ColumnMappings.Add(new ColumnMappingEntry { SourceColumn = sourceDefault, TargetColumn = targetDefault });
